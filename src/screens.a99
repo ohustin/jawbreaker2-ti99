@@ -49,6 +49,8 @@ gattra:
        movb @logoy,r4
        srl  r4,8
        bl   @putspr
+       bl   @endspr
+       bl   @putpat
        bl   @coleff
        b    @frmend
 gattr1:
@@ -169,6 +171,8 @@ gmenu5:
        mov  @jawx,r3
        mov  @jawy,r4
        bl   @putspr
+       bl   @endspr
+       bl   @putpat
        bl   @animdt
        movb @jawmod,r0
        jne  gmenu8                     ; The game is about to start
@@ -432,6 +436,7 @@ death:
        mov  @jawx,r3
        mov  @jawy,r4
        bl   @putspr
+       bl   @putpat
        mov  @jawy,r4
        a    @jawsy,r4
        ci   r4,192
@@ -441,6 +446,7 @@ death:
        li   r6,jawdt2
        mov  @jawx,r3
        bl   @putspr
+       bl   @putpat
        b    @frmend
 death1:
        bl   @savtxt
@@ -476,10 +482,17 @@ endse2:
        li   r6,tbrsh2                  ; The small brush
 endse3:
        bl   @putspr
+       mov  r6,*r10+
        li   r6,jaw1
        mov  @jawx,r3
        mov  @jawy,r4
        bl   @putspr
+       bl   @endspr
+       dect r10
+       mov  *r10,r6
+       bl   @putpat
+       li   r6,jaw1
+       bl   @putpat
        movb @dthdly,r0
        jne  endse4
        bl   @nxtlvl
@@ -586,6 +599,7 @@ screx2:
        mov  @objx,r3
        mov  @objy,r4
        bl   @putspr
+       bl   @putpat
 screx3:
        movb @objmcn,r0
        srl  r0,8

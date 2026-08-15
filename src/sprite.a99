@@ -47,22 +47,23 @@ initspr:
 *
 putspr:
        mov  r11,*r10+
-       mov  *r6+,r7                    ; Number of sprites
-putsp1:
-       mov  @tasptr,r0                 ; Sprite attribute entry
+       mov  r6,*r10+                   ; Keep the descriptor for pass two
+       mov  *r6+,r7
+       mov  r7,*r10+
+*      Pass one: the attributes.  They are consecutive in VRAM, so the
+*      write address is set once and the VDP does the rest.  This is
+*      the part that has to be over before the raster starts drawing.
+       mov  @tasptr,r0
        bl   @vwad
-       inct @tasptr
-       inct @tasptr
-*      y
-       movb *r6,r5
+putsp1:
+       movb *r6,r5                     ; y
        srl  r5,8
        a    r4,r5
        dec  r5
        andi r5,>00ff
        swpb r5
        movb r5,*r15
-*      x
-       movb @1(r6),r5
+       movb @1(r6),r5                  ; x
        srl  r5,8
        a    r3,r5
        ci   r5,255
@@ -71,39 +72,66 @@ putsp1:
 putsp2:
        swpb r5
        movb r5,*r15
-*      Pattern number
-       movb @tascnt,r5
+       movb @tascnt,r5                 ; Pattern number
        movb r5,*r15
        ab   @cst4,@tascnt
-*      Colour
-       movb @2(r6),r5
+       movb @2(r6),r5                  ; Colour
        movb r5,*r15
-*      Stream the pattern into the sprite generator table
+       inct @tasptr
+       inct @tasptr
+       ai   r6,6
+       dec  r7
+       jne  putsp1
+       dect r10
+       mov  *r10,r7
+       dect r10
+       mov  *r10,r6
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// putspr
+
+*********************************************************************
+*
+* Send the patterns of a descriptor sprite to the generator table
+*
+* r6: the same descriptor that was given to putspr
+*
+* This runs after the whole sprite list has been written, because the
+* attributes are what has to be in place before the raster starts.
+* Nothing has to be sent again while the animation frame stays the
+* same, which it does on seven frames out of eight.
+*
+putpat:
+       mov  r11,*r10+
+       mov  *r6,r7                     ; Number of sprites
+       c    r6,@lastsp
+       jeq  putsp5
+       mov  r6,@lastsp
+       inct r6                         ; Past the count
+putsp3:
        mov  @tgsptr,r0
        mov  @4(r6),r1
        bl   @b1pat
        li   r5,32
        a    r5,@tgsptr
-       ai   r6,6                       ; Next entry
+       ai   r6,6
        dec  r7
-       jne  putsp1
-*      Terminate the sprite list, unless a second sprite follows
-*      (the death sequence draws the player in two passes)
-       mov  @tasptr,r0
-       bl   @vwad
-       movb @cmode,r5
-       srl  r5,8
-       ci   r5,mdeath
-       jeq  putsp3
-       li   r5,>d000                   ; y = 208
-       movb r5,*r15
-putsp3:
+       jne  putsp3
+       jmp  putsp6
+putsp5:
+       li   r5,32                      ; The patterns are already there,
+putsp4:                                ; only move the pointer on
+       a    r5,@tgsptr
+       dec  r7
+       jne  putsp4
+putsp6:
        dect r10
        mov  *r10,r11
        b    *r11
 cst4   byte 4
        even
-*// putspr
+*// putpat
 
 *********************************************************************
 *
@@ -117,75 +145,83 @@ cst4   byte 4
 *
 putmst:
        mov  r11,*r10+
-       li   r7,2                       ; Two layers
-putms1:
-       mov  @tasptr,r0
-       bl   @vwad
-       inct @tasptr
-       inct @tasptr
-*      y
-       mov  r4,r5
-       dec  r5
-       andi r5,>00ff
-       swpb r5
-       movb r5,*r15
-*      x
-       mov  r3,r5
-       a    r8,r5
-       swpb r5
-       movb r5,*r15
-*      Pattern number
-       movb @3(r6),r5                  ; Status
+*      Pattern number of the first layer, the second is four on
+       movb @3(r6),r5
        srl  r5,8
        andi r5,15
        ci   r5,seaten
-       jeq  putms2
-       bl   @mstnpt                    ; Normal or scared: walk animation
-       jmp  putms3
+       jeq  putms1
+       bl   @mstnpt                    ; Alive: the walk animation
+       jmp  putms2
+putms1:
+       bl   @mstept                    ; Eaten: spinning, or the score
 putms2:
-       bl   @mstept                    ; Eaten: spinning or bonus value
-putms3:
-       swpb r5
-       movb r5,*r15
-       ab   @cst4,@tascnt
-*      Colour
-       movb @5(r6),r5                  ; Default colour
-       srl  r5,8
-       ci   r7,1                       ; Second layer is always white
+*      Colours: the monster colour with a white layer on top
+       movb @5(r6),r0
+       srl  r0,8
+       li   r7,15
+       movb @3(r6),r1
+       srl  r1,8
+       ci   r1,sscare
+       jne  putms3
+       bl   @mstsc2                    ; Scared: blue, blinking when the
+putms3:                                ; energizer is running out
+       andi r1,15
+       ci   r1,seaten
        jne  putms4
-       li   r5,15
+       li   r0,4
 putms4:
-       movb @3(r6),r2
-       srl  r2,8
-       ci   r2,sscare
-       jne  putms5
-       bl   @mstscl                    ; Scared colour, blinks when the
-putms5:                                ; energizer is running out
-       andi r2,15
-       ci   r2,seaten
-       jne  putms6
-       li   r5,15
-       ci   r7,1
-       jeq  putms6
-       li   r5,4
-putms6:
        mov  r8,r8                      ; Early clock bit for the left exit
-       jeq  putms7
-       ori  r5,>0080
-putms7:
+       jeq  putms5
+       ori  r0,>0080
+       ori  r7,>0080
+putms5:
+*      Both attribute entries, eight bytes, no address setup needed
+       mov  r4,r1
+       dec  r1
+       andi r1,>00ff
+       swpb r1
+       mov  r3,r2
+       a    r8,r2
+       andi r2,>00ff
+       swpb r2
+       swpb r0
+       swpb r7
+       movb r1,*r15                    ; y, x, pattern, colour
+       movb r2,*r15
        swpb r5
        movb r5,*r15
-       dec  r7
-       jne  putms1
-*      Terminate the sprite list
-       mov  @tasptr,r0
-       bl   @vwad
-       li   r5,>d000
+       movb r0,*r15
+       movb r1,*r15                    ; and the white layer
+       movb r2,*r15
+       swpb r5
+       ai   r5,4
+       swpb r5
        movb r5,*r15
+       movb r7,*r15
+       li   r0,8
+       a    r0,@tasptr
+       ab   @cst8,@tascnt
        dect r10
        mov  *r10,r11
        b    *r11
+cst8   byte 8
+       even
 *// putmst
+
+*********************************************************************
+*
+* Close the sprite list, once, after everything has been drawn
+*
+endspr:
+       mov  r11,*r10+
+       mov  @tasptr,r0
+       li   r1,>d000                   ; y = 208 stops the VDP
+       bl   @vsbw
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// endspr
 
 *
 * Pattern number for a monster that is alive: the frame follows the x
@@ -193,10 +229,7 @@ putms7:
 *
 mstnpt:
        mov  r11,r9
-       movb @tascnt,r5
-       srl  r5,8
-       andi r5,4                       ; Layer
-       mov  r5,r2
+       clr  r2
        mov  r3,r5
        neg  r5
        andi r5,>00ff
@@ -233,9 +266,6 @@ mstept:
        andi r5,>00ff
        srl  r5,2
        sla  r5,3
-       movb @tascnt,r2
-       srl  r2,8
-       a    r2,r5
        andi r5,>003f
        ai   r5,mstetn
        b    *r9
@@ -245,10 +275,6 @@ mstep2:
        srl  r5,1
        andi r5,>0038
        ai   r5,-8
-       movb @tascnt,r2
-       srl  r2,8
-       andi r2,4
-       a    r2,r5
        ai   r5,mst100
        b    *r9
 *// mstept
@@ -257,22 +283,19 @@ mstep2:
 * Scared monsters are blue, and blink between blue and their own
 * colour when the energizer is about to run out
 *
-mstscl:
-       li   r5,4
-       movb @scrtim,r1
-       srl  r1,8
-       ci   r1,100
+mstsc2:
+       li   r0,4                       ; Blue
+       movb @scrtim,r9
+       srl  r9,8
+       ci   r9,100
        jhe  mstsc1
-       andi r1,4
+       andi r9,4
        jeq  mstsc1
-       movb @5(r6),r5                  ; Back to the normal colour
-       srl  r5,8
-       ci   r7,1
-       jne  mstsc1
-       li   r5,15
+       movb @5(r6),r0                  ; Blink back to the real colour
+       srl  r0,8
 mstsc1:
        rt
-*// mstscl
+*// mstsc2
 
 *********************************************************************
 *

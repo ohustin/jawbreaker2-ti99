@@ -130,7 +130,38 @@ image:
 - the bonus sweet appearing on its timer with the right characters per level
 - easy mode running the game at exactly half the speed of hard mode
 
-Not checked, because the simulator has no timing model: whether a frame always
-fits inside one vertical blank on real hardware. The heaviest frame does the
-same work the MSX version did in its interrupt handler, plus the four or seven
-wall rows written cell by cell, so it is worth watching on hardware.
+## Frame timing, and the flicker it caused
+
+`tools/sim99.py` counts cycles with a rough model: TMS9900 base cycles plus
+four wait states for every access outside the scratch pad, which is what the
+console's eight bit bus costs. At 3 MHz a frame is 16.6 ms and the vertical
+blanking interval about 4.3 ms.
+
+The first version sat at **17.0 ms per frame**, and finished writing the sprite
+attribute table **6.1 ms** into the frame, i.e. a quarter of the way down the
+visible screen. On top of that, every sprite call closed the list with its own
+y=208 marker, so while the monsters were being drawn the list was repeatedly
+truncated and extended under the raster. Together that made the sprites
+flicker. Four changes fixed it:
+
+1. **One end-of-list marker per frame.** `endspr` writes it once, after
+   everything has been drawn, instead of `putspr` and `putmst` each writing
+   their own.
+2. **Draw first, think afterwards.** The frame now writes the sprite table
+   straight after the frame flag and runs the game logic below it; monster
+   drawing (`drwmst`) is split out of the monster update (`updmst`).
+3. **Attributes in one burst.** The entries are consecutive in VRAM, so the
+   write address is set once per group, and the player's patterns are uploaded
+   after the list is closed (`putpat`), only when the animation frame has
+   actually changed.
+4. **Cheaper wall rows.** The MSX version uploads all 32 cells of every wall
+   row every frame. Only the eight cells of the opening ever change, and they
+   are now written straight out with no per cell test: 5.2 ms down to 2.2 ms.
+   The score is likewise only redrawn when it changes.
+
+That leaves **11.8 ms per frame**, with the sprite table finished after
+**3.9 ms**, inside the blanking interval on every frame.
+
+The one thing still worth watching on real hardware: the level restart uploads
+1792 bytes of sprite patterns, which takes about 30 ms. It runs with the
+display disabled, so it shows as a short pause rather than a glitch.

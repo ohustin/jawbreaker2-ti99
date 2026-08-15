@@ -190,7 +190,9 @@ sndlen equ  16
 * Return address stack (grows up), 8 levels
 *
 stack  equ  sndvar+sndlen
-padend equ  stack+16
+lastsp equ  stack+16                   ; Descriptor drawn last frame
+lastsc equ  lastsp+2                   ; Score that is on the screen
+padend equ  lastsc+2
 
 *********************************************************************
 *

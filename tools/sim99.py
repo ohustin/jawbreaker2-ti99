@@ -54,10 +54,16 @@ class Machine(object):
         self.col = 0
         self.keys = set()
         self.frames = 0
+        # Rough cycle model: TMS9900 base cycles plus four wait state
+        # cycles for every access outside the 16 bit scratch pad, which
+        # is what the 8 bit multiplexer of the console costs.
+        self.cycles = 0
 
     # ------------------------------------------------ memory
     def rb(self, a):
         a &= 0xFFFF
+        if not (0x8300 <= a < 0x8400):
+            self.cycles += 4
         if 0x6000 <= a < 0x8000:
             return self.rom[self.bank * 0x2000 + (a - 0x6000)]
         if 0x8000 <= a < 0x8400:
@@ -74,6 +80,8 @@ class Machine(object):
     def wb(self, a, v):
         a &= 0xFFFF
         v &= 0xFF
+        if not (0x8300 <= a < 0x8400):
+            self.cycles += 4
         if 0x6000 <= a < 0x8000:
             self.bank = ((a - 0x6000) >> 1) % self.nbanks
             return
@@ -209,6 +217,17 @@ class Machine(object):
         op = self.rw(self.pc)
         self.pc += 2
         top = op >> 12
+        if top >= 4:
+            self.cycles += 14
+        elif top == 3:
+            self.cycles += 52 if (op & 0x0C00) else 20
+        elif top == 2:
+            self.cycles += 14
+        elif top == 1:
+            self.cycles += 10
+        else:
+            hi = op >> 8
+            self.cycles += 12 if hi < 0x08 else 12 + 2 * ((op >> 4) & 15)
 
         if top >= 4:
             byte = top in (0x5, 0x7, 0x9, 0xB, 0xD, 0xF)

@@ -28,7 +28,6 @@ mgame0:
        andi r0,1
        jeq  mgame0b
 mgame0a:
-       bl   @gstjaw
        bl   @initspr
 *      Player sprite: mouth open / closed, sideways or vertical
        li   r6,jaw1
@@ -49,7 +48,16 @@ mgame3:
        mov  @jawx,r3
        mov  @jawy,r4
        bl   @putspr
-       bl   @gstmst
+       mov  r6,*r10+
+       bl   @drwmst
+       bl   @endspr
+       dect r10
+       mov  *r10,r6
+       bl   @putpat
+*      Everything above this point writes to the sprite table and has
+*      to happen inside the vertical blank; everything below is logic
+       bl   @gstjaw
+       bl   @updmst
        bl   @gstdot
        bl   @gstopn
        bl   @dspscr
@@ -460,11 +468,16 @@ addsc2:
 *
 dspscr:
        mov  r11,*r10+
+       mov  @score,r3
+       c    r3,@lastsc                 ; Nothing to do most frames
+       jeq  dspsc1
+       mov  r3,@lastsc
        li   r0,(23*32)+10
        li   r1,strscr
        bl   @b1prnt
        mov  @score,r3
        bl   @dsp5
+dspsc1:
        dect r10
        mov  *r10,r11
        b    *r11
@@ -505,7 +518,41 @@ animd2:
 *
 * Monsters
 *
-gstmst:
+drwmst:
+       mov  r11,*r10+
+       mov  @tasptr,r0                 ; One write address for the lot
+       bl   @vwad
+       li   r6,mstdat
+       movb @nbrmst,r0
+       movb r0,@mstcnt
+drwms1:
+       mov  *r6,r3
+       andi r3,>00ff
+       movb @2(r6),r4
+       srl  r4,8
+       clr  r8
+       mov  *r6,r0
+       ci   r0,256                     ; In the left hand exit area the
+       jhe  drwms2                     ; sprite needs the early clock bit
+       li   r8,32
+drwms2:
+       bl   @putmst
+       ai   r6,mstlen
+       movb @mstcnt,r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@mstcnt
+       jne  drwms1
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// drwmst
+
+*
+* Move the monsters and see whether they caught the player
+*
+updmst:
        mov  r11,*r10+
        li   r6,mstdat
        movb @nbrmst,r0
@@ -536,18 +583,6 @@ gstms3:
        mov  r0,*r6
        bl   @newrow
 gstms4:
-*      Draw it
-       mov  *r6,r3
-       andi r3,>00ff
-       movb @2(r6),r4
-       srl  r4,8
-       clr  r8
-       mov  *r6,r0
-       ci   r0,256                     ; In the left hand exit area the
-       jhe  gstms5                     ; sprite needs the early clock bit
-       li   r8,32
-gstms5:
-       bl   @putmst
 *      Collision with the player
        movb @gtype,r0
        srl  r0,8
@@ -569,7 +604,7 @@ gstms7:
        dect r10
        mov  *r10,r11
        b    *r11
-*// gstmst
+*// updmst
 
 *
 * A monster that is scared or eaten counts down and then turns back
@@ -818,7 +853,6 @@ swtdir:
 *
 wallrw:
        mov  r11,*r10+
-       mov  r6,*r10+
        mov  r7,*r10+
        mov  r1,r5
        srl  r5,3
@@ -827,63 +861,37 @@ wallrw:
        andi r8,7                       ; Sub cell offset
        li   r0,tnp
        a    r4,r0
+       a    r5,r0
        bl   @vwad
-       li   r2,lvlwal                  ; Wall template
-       li   r3,opnii                   ; Opening cells
-       li   r1,7
-       movb @gtype,r0
-       srl  r0,8
-       ci   r0,2
-       jne  wallr1
-       li   r2,lvlwl2
-       li   r3,opni
-       li   r1,5
-wallr1:
-       clr  r7                         ; Cell counter
-wallr2:
-       mov  r7,r0
-       s    r5,r0                      ; Distance into the opening
-       jlt  wallr6                     ; Left of it
-       c    r0,r1
-       jh   wallr6                     ; Right of it
-       mov  r3,r6
-       a    r0,r6
-       movb *r6,r0
-       srl  r0,8
-       ci   r0,255                     ; Trailing wall cell, only needed
-       jne  wallr3                     ; while the opening sits between
-       mov  r8,r8                      ; two cells
-       jeq  wallr6
-       li   r0,2
-       jmp  wallr5
-wallr3:
-       ci   r0,128                     ; The edge characters carry the
-       jl   wallr5                     ; sub cell offset
+       li   r7,>0200                   ; Wall
+       movb r7,*r15
+       li   r0,128                     ; Left edge, plus the offset
        a    r8,r0
-wallr5:
        sla  r0,8
        movb r0,*r15
-       jmp  wallr7
-wallr6:
-       movb *r2,*r15                   ; Plain wall
-wallr7:
-       inc  r2
-       inc  r7
-       ci   r7,32
-       jne  wallr2
+       clr  r0                         ; The gap itself
+       movb r0,*r15
+       movb r0,*r15
+       movb @gtype,r1
+       srl  r1,8
+       ci   r1,2
+       jeq  wallr1
+       movb r0,*r15                    ; Jawbreaker II is two cells wider
+       movb r0,*r15
+wallr1:
+       li   r0,136                     ; Right edge, plus the offset
+       a    r8,r0
+       sla  r0,8
+       movb r0,*r15
+       mov  r8,r8                      ; The cell the opening is leaving
+       jeq  wallr2                     ; only needs closing while the
+       movb r7,*r15                    ; opening sits between two cells
+wallr2:
        dect r10
        mov  *r10,r7
        dect r10
-       mov  *r10,r6
-       dect r10
        mov  *r10,r11
        b    *r11
-*
-* Opening cells: wall, left edge, empty, right edge, trailing wall
-*
-opni   byte 2,128,0,0,136,255
-opnii  byte 2,128,0,0,0,0,136,255
-       even
 *// wallrw
 
 *********************************************************************
