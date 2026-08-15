@@ -113,7 +113,12 @@ Things that bit during the port, kept here because they will bite again:
 
 ## What was checked
 
-`tools/sim99.py` drove the following through the built cartridge image:
+The cartridge has been run in **Classic99** with the real console ROMs: the
+console recognises the header ("2 FOR JAWBREAKER II"), the attraction screen,
+menu, both game types, play, death and game over all behave.
+
+Before that, `tools/sim99.py` drove the following through the built cartridge
+image:
 
 - boot, attraction screen with the intro script and credits, menu
 - selecting easy/hard and Jawbreaker I/II, starting a game

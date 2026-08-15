@@ -19,9 +19,22 @@ back to the TI-99/4A.
 A plain TI-99/4A console. The game is a 16K cartridge and keeps all of its
 variables in the 256 byte scratch pad, so **no memory expansion is required**.
 
-- **Classic99** (<https://github.com/tursilion/classic99>) — load
-  `build/jawbreaker2-8.bin`; the `…8.bin` suffix tells Classic99 that this is a
-  bank switched cartridge.
+![running in Classic99](docs/classic99.png)
+
+- **Classic99** (<https://github.com/tursilion/classic99>, prebuilt in
+  `dist/classic99.zip`) — `run-classic99.bat` builds the cartridge, copies it
+  over and starts the emulator; or by hand:
+
+  ```
+  classic99.exe -rom jawbreaker2-8.bin
+  ```
+
+  Then press a key on the TI title screen and **2 for JAWBREAKER II**. Loading
+  by hand through `Cartridge → User → Open` works too; the `…8.bin` suffix
+  tells Classic99 that this is a bank switched cartridge.
+
+  This is where the port has actually been run: title screen, menu, both game
+  types, playing, dying and game over.
 - **js99er** (<https://js99er.net>) — drag `build/jawbreaker2.rpk` onto the page.
 - **MAME** — `mame ti99_4a -cart build/jawbreaker2.rpk` (needs the TI-99/4A
   system ROMs, which MAME does not ship).
