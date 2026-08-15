@@ -1,0 +1,964 @@
+*********************************************************************
+*
+* Gameplay
+*
+* Port of msx/Code/game_main.asm, msx/JB2_Openings.asm and
+* msx/JB2_Bonus.asm.
+*
+* The MSX version keeps a copy of the whole name table in RAM and
+* works on that copy.  The TI-99/4A has only the 256 byte scratch pad
+* when no memory expansion is present, so the port reads the few
+* bytes it needs straight back out of VRAM and writes the moving wall
+* rows directly to the name table.  The logic itself is unchanged.
+*
+*********************************************************************
+
+*********************************************************************
+*
+* Mode 0 - playing
+*
+mgame0:
+*      In easy mode the whole game frame is skipped every other frame,
+*      so everything moves at half speed, exactly as on the MSX
+       movb @diffic,r0
+       srl  r0,8
+       ci   r0,1
+       jeq  mgame0a
+       mov  @timer,r0
+       andi r0,1
+       jeq  mgame0b
+mgame0a:
+       bl   @gstjaw
+       bl   @initspr
+*      Player sprite: mouth open / closed, sideways or vertical
+       li   r6,jaw1
+       mov  @jawsy,r0
+       jeq  mgame1
+       li   r6,jawv1
+mgame1:
+       mov  @timer,r0
+       andi r0,8
+       jne  mgame3
+       mov  @jawsy,r0
+       jeq  mgame2
+       li   r6,jawv2
+       jmp  mgame3
+mgame2:
+       li   r6,jaw2
+mgame3:
+       mov  @jawx,r3
+       mov  @jawy,r4
+       bl   @putspr
+       bl   @gstmst
+       bl   @gstdot
+       bl   @gstopn
+       bl   @dspscr
+       bl   @animdt
+       movb @jawmod,r0
+       srl  r0,8
+       ci   r0,1
+       jne  mgame4
+       bl   @gstscr
+mgame4:
+       bl   @gstbon
+mgame0b:
+       b    @frmend
+*// mgame0
+
+*********************************************************************
+*
+* Energizer count down
+*
+gstscr:
+       movb @scrtim,r0
+       srl  r0,8
+       dec  r0
+       jeq  gstscr1
+       sla  r0,8
+       movb r0,@scrtim
+       rt
+gstscr1:
+       clr  r0
+       movb r0,@jawmod
+       movb r0,@bonmul
+       rt
+*// gstscr
+
+*********************************************************************
+*
+* Player control
+*
+gstjaw:
+       mov  r11,*r10+
+       bl   @rdstck
+       movb @jawmov,r0
+       jeq  gstjaw1
+       bl   @movjaw
+gstjaw1:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// gstjaw
+
+*
+* Move the player one step, the move always runs to the end of the
+* cell so that the player stays on the grid
+*
+movjaw:
+       movb @jawmcn,r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@jawmcn
+       jne  movjaw1
+       movb r0,@jawmov                 ; Move finished
+movjaw1:
+       mov  @jawsx,r0
+       a    r0,@jawx
+       mov  @jawsy,r0
+       a    r0,@jawy
+       rt
+*// movjaw
+
+*
+* Read the stick, but only when the player is not already moving
+*
+rdstck:
+       mov  r11,*r10+
+       movb @jawmov,r0
+       jne  rdstc9
+       bl   @rddir
+       sla  r1,8
+       movb r1,@joyval
+       srl  r1,8
+       ci   r1,3
+       jeq  jawrgt
+       ci   r1,7
+       jeq  jawlft
+       ci   r1,5
+       jeq  jawdwn
+       ci   r1,1
+       jeq  jawupp
+rdstc9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+jawrgt:
+       movb @maxjwx,r0
+       srl  r0,8
+       c    r0,@jawx
+       jeq  rdstc9
+       bl   @setmvx
+       mov  @jawsx,r0
+       jmp  rdstc9
+jawlft:
+       mov  @jawx,r0
+       jeq  rdstc9
+       bl   @setmvx
+       neg  @jawsx
+       jmp  rdstc9
+jawdwn:
+       movb @maxjwy,r0
+       srl  r0,8
+       c    r0,@jawy
+       jeq  rdstc9
+       movb @jawsiz,r0                 ; Is there an opening below?
+       srl  r0,8
+       a    @jawy,r0
+       bl   @celbel
+       jne  rdstc9
+       bl   @setmvy
+       jmp  rdstc9
+jawupp:
+       mov  @jawy,r0
+       jeq  rdstc9
+       ai   r0,-8                      ; Is there an opening above?
+       bl   @celbel
+       jne  rdstc9
+       bl   @setmvy
+       neg  @jawsy
+       jmp  rdstc9
+*// rdstck
+
+*
+* Look at the name table cell the player would move into
+* r0: y in pixels.  Returns EQ when the cell is empty
+*
+celbel:
+       mov  r11,*r10+
+       srl  r0,3
+       andi r0,31
+       sla  r0,5
+       mov  @jawx,r1
+       ai   r1,8
+       srl  r1,3
+       andi r1,31
+       a    r1,r0
+       ai   r0,tnp
+       bl   @vsbr
+       srl  r1,8                       ; The byte comes back in the MSB
+       dect r10
+       mov  *r10,r11
+       mov  r1,r1                      ; Sets EQ when the cell is empty
+       b    *r11
+*// celbel
+
+*
+* Start a horizontal / vertical move
+*
+setmvx:
+       li   r0,>0100
+       movb r0,@jawmov
+       movb @mspdx,r0
+       srl  r0,8
+       mov  r0,@jawsx
+       movb @mcntx,r0
+       movb r0,@jawmcn
+       clr  @jawsy
+       rt
+setmvy:
+       li   r0,>0100
+       movb r0,@jawmov
+       clr  @jawsx
+       movb @mcnty,r0
+       movb r0,@jawmcn
+       movb @mspdy,r0
+       srl  r0,8
+       mov  r0,@jawsy
+       rt
+*// setmvx, setmvy
+
+*********************************************************************
+*
+* Eat whatever is under the player
+*
+* Jawbreaker II moves the player in steps of four pixels over a 32
+* pixel wide sprite, so three cells are tested, Jawbreaker I has a 16
+* pixel sprite and tests two.
+*
+gstdot:
+       mov  r11,*r10+
+       mov  @jawy,r5
+       li   r7,3
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jne  gstdo1
+       ai   r5,7                       ; Jawbreaker I
+       li   r7,2
+       jmp  gstdo2
+gstdo1:
+       ai   r5,8                       ; Jawbreaker II
+gstdo2:
+       srl  r5,3
+       andi r5,31
+       sla  r5,5
+       mov  @jawx,r0
+       srl  r0,3
+       andi r0,31
+       a    r0,r5                      ; r5 = name table offset
+gstdo3:
+       li   r0,tnp
+       a    r5,r0
+       bl   @vsbr
+       srl  r1,8
+       ci   r1,22                      ; Everything above 21 is scenery
+       jhe  gstdo4
+       sla  r1,1
+       mov  @dottab(r1),r1
+       bl   *r1
+gstdo4:
+       inc  r5
+       dec  r7
+       jne  gstdo3
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* What each character does when the player runs into it
+*
+dottab data dnothg                     ; 0 empty
+       data dnothg                     ; 1
+       data dnothg                     ; 2 wall
+       data dnothg                     ; 3
+       data setdot                     ; 4 dot
+       data setscd                     ; 5 energizer
+       data eatbon                     ; 6-13 candy, pop, ...
+       data eatbon
+       data eatbon
+       data eatbon
+       data eatbon
+       data eatbon
+       data eatbon
+       data eatbon
+       data eatbnx                     ; 14-21 the more valuable sweets
+       data eatbnx
+       data eatbnx
+       data eatbnx
+       data eatbnx
+       data eatbnx
+       data eatbnx
+       data eatbnx
+dnothg rt
+*// gstdot
+
+*
+* Eat a dot
+*
+setdot:
+       mov  r11,*r10+
+       li   r0,tnp                     ; Rub it out
+       a    r5,r0
+       clr  r1
+       bl   @vsbw
+       li   r1,sfxdot
+       bl   @sfxini
+       li   r3,10
+       bl   @addscr
+       movb @dots,r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@dots
+       jne  setdo1
+       bl   @levcmp                    ; Screen cleared
+setdo1:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// setdot
+
+*
+* Eat an energizer
+*
+setscd:
+       mov  r11,*r10+
+       li   r0,>0100
+       movb r0,@jawmod                 ; Hunting mode
+       clr  r0
+       movb r0,@bonmul
+       li   r1,sfxspc
+       bl   @sfxini
+       li   r3,90
+       bl   @addscr
+       bl   @scrmst
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jeq  setsc1                     ; Jawbreaker I: the energizer stays
+       bl   @setdot                    ; Jawbreaker II: eat it as well
+setsc1:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// setscd
+
+*
+* Scare every monster that is still alive
+*
+scrmst:
+       li   r6,mstdat
+       movb @nbrmst,r4
+       srl  r4,8
+scrms1:
+       movb @3(r6),r0
+       srl  r0,8
+       andi r0,15
+       ci   r0,seaten                  ; Already eaten, leave it alone
+       jeq  scrms2
+       li   r0,sscare*256
+       movb r0,@3(r6)
+       movb @scrdur,r0
+       movb r0,@8(r6)
+scrms2:
+       ai   r6,mstlen
+       dec  r4
+       jne  scrms1
+       movb @scrdur,r0
+       movb r0,@scrtim
+       rt
+*// scrmst
+
+*
+* Eat a sweet
+*
+eatbnx:
+       mov  r11,*r10+
+       li   r3,200
+       bl   @addscr
+       jmp  eatbn1
+eatbon:
+       mov  r11,*r10+
+eatbn1:
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jne  eatbn2
+       bl   @scrmst                    ; In Jawbreaker I sweets scare too
+eatbn2:
+       bl   @nobonu
+       li   r1,sfxspc
+       bl   @sfxini
+       li   r3,200
+       bl   @addscr
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// eatbon, eatbnx
+
+*********************************************************************
+*
+* Screen cleared, run the tooth brush sequence
+*
+levcmp:
+       mov  r11,*r10+
+       li   r0,mend*256
+       movb r0,@cmode
+       li   r0,150*256
+       movb r0,@dthdly
+       li   r0,255-33                  ; Tooth brush starts off screen right
+       mov  r0,@tbrshx
+       li   r1,sfxfin
+       bl   @sfxini
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// levcmp
+
+*********************************************************************
+*
+* Add r3 to the score, hand out an extra life every 10000 points
+*
+addscr:
+       mov  r11,*r10+
+       a    r3,@score
+       mov  @score,r0
+       c    r0,@nxtlif
+       jl   addsc1
+       li   r1,10000
+       a    r1,@nxtlif
+       movb @lives,r1
+       ai   r1,>0100
+       movb r1,@lives
+       li   r1,sfxbon
+       bl   @sfxini
+addsc1:
+       mov  @score,r0
+       c    r0,@hiscor
+       jl   addsc2
+       mov  r0,@hiscor
+addsc2:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// addscr
+
+*********************************************************************
+*
+* Show the score
+*
+dspscr:
+       mov  r11,*r10+
+       li   r0,(23*32)+10
+       li   r1,strscr
+       bl   @b1prnt
+       mov  @score,r3
+       bl   @dsp5
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// dspscr
+
+*********************************************************************
+*
+* Animate the colour of the energizer character
+*
+animdt:
+       mov  r11,*r10+
+       li   r0,tc+(5*8)
+       bl   @animd1
+       li   r0,tc+(5*8)+4096
+       bl   @animd1
+       dect r10
+       mov  *r10,r11
+       b    *r11
+animd1:
+       mov  r11,r8
+       bl   @vwad
+       mov  @timer,r1
+       andi r1,>00ff
+       srl  r1,1
+       li   r2,8
+animd2:
+       mov  r1,r3
+       andi r3,15
+       sla  r3,8
+       movb r3,*r15
+       inc  r1
+       dec  r2
+       jne  animd2
+       b    *r8
+*// animdt
+
+*********************************************************************
+*
+* Monsters
+*
+gstmst:
+       mov  r11,*r10+
+       li   r6,mstdat
+       movb @nbrmst,r0
+       movb r0,@mstcnt
+gstms1:
+       mov  *r6,r1                     ; x = x + dx
+       a    @6(r6),r1
+       movb @3(r6),r0
+       srl  r0,8
+       ci   r0,snorml
+       jeq  gstms2
+       bl   @msteat                    ; Eaten or scared: count down
+gstms2:
+       mov  r1,*r6
+*      Off the left or the right edge?
+       mov  @6(r6),r0
+       jgt  gstms3
+       ci   r1,226
+       jgt  gstms4
+       li   r0,510                     ; Re-enter from the right
+       mov  r0,*r6
+       bl   @newrow
+       jmp  gstms4
+gstms3:
+       ci   r1,510
+       jlt  gstms4
+       li   r0,226                     ; Re-enter from the left
+       mov  r0,*r6
+       bl   @newrow
+gstms4:
+*      Draw it
+       mov  *r6,r3
+       andi r3,>00ff
+       movb @2(r6),r4
+       srl  r4,8
+       clr  r8
+       mov  *r6,r0
+       ci   r0,256                     ; In the left hand exit area the
+       jhe  gstms5                     ; sprite needs the early clock bit
+       li   r8,32
+gstms5:
+       bl   @putmst
+*      Collision with the player
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jeq  gstms6
+       li   r1,28                      ; 32x32 player
+       jmp  gstms7
+gstms6:
+       li   r1,13                      ; 16x16 player
+gstms7:
+       bl   @tstcol
+       ai   r6,mstlen
+       movb @mstcnt,r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@mstcnt
+       jne  gstms1
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// gstmst
+
+*
+* A monster that is scared or eaten counts down and then turns back
+* into a normal monster
+*
+msteat:
+       movb @8(r6),r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@8(r6)
+       jne  mstea1
+       clr  r0
+       movb r0,@3(r6)                  ; Back to normal
+mstea1:
+       rt
+*// msteat
+
+*
+* Pick a row that no other monster is using
+*
+newrow:
+       mov  r11,*r10+
+       bl   @random
+       andi r1,3                       ; Random row to start looking at
+       movb @rowsiz,r0
+       srl  r0,8
+       mpy  r0,r1                      ; r2 = row * row height
+       mov  r2,r4
+       movb @nbrrow,r7
+       srl  r7,8
+newro1:
+       li   r5,mstdat                  ; Is any monster on this row?
+       li   r3,6
+newro2:
+       movb @2(r5),r0
+       srl  r0,8
+       c    r0,r4
+       jeq  newro3
+       ai   r5,mstlen
+       dec  r3
+       jne  newro2
+*      Free row found
+       mov  r4,r0
+       sla  r0,8
+       movb r0,@2(r6)
+       jmp  newro4
+newro3:
+       movb @rowsiz,r0                 ; Try the next row down
+       srl  r0,8
+       a    r0,r4
+       ci   r4,191
+       jl   newro5
+       clr  r4
+newro5:
+       dec  r7
+       jne  newro1
+newro4:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// newrow
+
+*********************************************************************
+*
+* Collision between the player and the monster in r6
+*
+* r1: how close the two have to be
+*
+tstcol:
+       mov  r11,*r10+
+       movb @2(r6),r0                  ; Monster y
+       srl  r0,8
+       mov  @jawy,r2
+       s    r0,r2
+       jgt  tstco1
+       neg  r2
+tstco1:
+       c    r2,r1
+       jhe  tstco9
+       mov  @jawx,r2                   ; Monster x is 256 based
+       ai   r2,256
+       s    *r6,r2
+       jgt  tstco2
+       neg  r2
+tstco2:
+       c    r2,r1
+       jhe  tstco9
+       bl   @collis
+tstco9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// tstcol
+
+*
+* The player and a monster have met
+*
+collis:
+       mov  r11,*r10+
+       movb @3(r6),r0
+       srl  r0,8
+       mov  r0,r1
+       andi r1,15
+       ci   r1,seaten                  ; Already eaten
+       jeq  colli9
+       ci   r0,snorml
+       jeq  killjw
+*      Eat the monster, every one in a row is worth more
+       movb @bonmul,r0
+       srl  r0,8
+       ci   r0,4
+       jeq  colli1
+       inc  r0
+colli1:
+       sla  r0,8
+       movb r0,@bonmul
+       srl  r0,8
+       mov  r0,r1
+       sla  r0,4
+       ori  r0,seaten
+       sla  r0,8
+       movb r0,@3(r6)
+       movb @scrdur,r0
+       movb r0,@8(r6)
+       li   r3,100
+       mpy  r1,r3                      ; r4 = multiplier * 100
+       mov  r4,r3
+       bl   @addscr
+       li   r1,sfxmst
+       bl   @sfxini
+colli9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* The player has been caught
+*
+killjw:
+       li   r0,100*256
+       movb r0,@dthdly
+       li   r0,mdeath*256
+       movb r0,@cmode
+       clr  @jawsx
+       movb @lives,r0
+       ai   r0,-256
+       movb r0,@lives
+       li   r1,sfxdie
+       bl   @sfxini
+       jmp  colli9
+*// collis
+
+*********************************************************************
+*
+* The moving openings in the walls
+*
+* The MSX version keeps the wall rows in its RAM copy of the name
+* table and uploads them every frame.  Here the row is generated
+* straight into VRAM: everything is wall except for the six (or four)
+* cells of the opening, whose edge characters carry the sub cell
+* offset so that the opening slides smoothly.
+*
+gstopn:
+       mov  r11,*r10+
+       li   r6,openin
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jeq  gstop5
+*      Jawbreaker II: four walls, five rows apart
+       li   r7,4
+       li   r4,4*32                    ; First wall row
+gstop1:
+       movb *r6,r1                     ; Opening position
+       srl  r1,8
+       jeq  gstop2
+       ci   r1,200
+       jne  gstop3
+gstop2:
+       bl   @swtdir
+gstop3:
+       movb @1(r6),r0                  ; Direction, signed
+       srl  r0,8
+       ci   r0,128
+       jl   gstop4
+       ai   r0,-256
+gstop4:
+       a    r0,r1
+       sla  r1,8
+       movb r1,*r6
+       srl  r1,8
+       bl   @wallrw
+       ai   r4,5*32
+       inct r6
+       dec  r7
+       jne  gstop1
+       jmp  gstop9
+*      Jawbreaker I: seven walls, three rows apart
+gstop5:
+       li   r7,7
+       li   r4,2*32
+gstop6:
+       movb *r6,r1
+       srl  r1,8
+       ci   r1,32
+       jeq  gstop7
+       ci   r1,160
+       jne  gstop8
+gstop7:
+       bl   @swtdir
+gstop8:
+       movb @1(r6),r0
+       srl  r0,8
+       ci   r0,128
+       jl   gstop10
+       ai   r0,-256
+gstop10:
+       a    r0,r1
+       sla  r1,8
+       movb r1,*r6
+       srl  r1,8
+       bl   @wallrw
+       ai   r4,3*32
+       inct r6
+       dec  r7
+       jne  gstop6
+gstop9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+swtdir:
+       movb @1(r6),r0
+       srl  r0,8
+       neg  r0
+       sla  r0,8
+       movb r0,@1(r6)
+       rt
+*// gstopn
+
+*
+* Draw one wall row
+*
+* r1: opening position in pixels
+* r4: row offset in the name table
+*
+wallrw:
+       mov  r11,*r10+
+       mov  r6,*r10+
+       mov  r7,*r10+
+       mov  r1,r5
+       srl  r5,3
+       andi r5,31                      ; First cell of the opening
+       mov  r1,r8
+       andi r8,7                       ; Sub cell offset
+       li   r0,tnp
+       a    r4,r0
+       bl   @vwad
+       li   r2,lvlwal                  ; Wall template
+       li   r3,opnii                   ; Opening cells
+       li   r1,7
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jne  wallr1
+       li   r2,lvlwl2
+       li   r3,opni
+       li   r1,5
+wallr1:
+       clr  r7                         ; Cell counter
+wallr2:
+       mov  r7,r0
+       s    r5,r0                      ; Distance into the opening
+       jlt  wallr6                     ; Left of it
+       c    r0,r1
+       jh   wallr6                     ; Right of it
+       mov  r3,r6
+       a    r0,r6
+       movb *r6,r0
+       srl  r0,8
+       ci   r0,255                     ; Trailing wall cell, only needed
+       jne  wallr3                     ; while the opening sits between
+       mov  r8,r8                      ; two cells
+       jeq  wallr6
+       li   r0,2
+       jmp  wallr5
+wallr3:
+       ci   r0,128                     ; The edge characters carry the
+       jl   wallr5                     ; sub cell offset
+       a    r8,r0
+wallr5:
+       sla  r0,8
+       movb r0,*r15
+       jmp  wallr7
+wallr6:
+       movb *r2,*r15                   ; Plain wall
+wallr7:
+       inc  r2
+       inc  r7
+       ci   r7,32
+       jne  wallr2
+       dect r10
+       mov  *r10,r7
+       dect r10
+       mov  *r10,r6
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* Opening cells: wall, left edge, empty, right edge, trailing wall
+*
+opni   byte 2,128,0,0,136,255
+opnii  byte 2,128,0,0,0,0,136,255
+       even
+*// wallrw
+
+*********************************************************************
+*
+* The bonus sweet in the middle of the screen
+*
+gstbon:
+       mov  r11,*r10+
+       dec  @ttbonu
+       jne  gstbo9
+       li   r0,tnp
+       a    @bonoff,r0
+       bl   @vsbr
+       jne  gstbo1                     ; Something is already there
+       movb @level,r1
+       srl  r1,8
+       andi r1,3
+       sla  r1,1
+       mov  @bontab(r1),r1
+       jmp  gstbo2
+gstbo1:
+       bl   @nobonu
+       jmp  gstbo9
+gstbo2:
+       mov  *r1+,r0                    ; Time till the next change
+       mov  r0,@ttbonu
+       bl   @putbon
+gstbo9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+bontab data bonice                     ; level 0 mod 4
+       data boncan                     ; 1 candy
+       data bonpop                     ; 2 pop
+       data bonjel                     ; 3 jelly bean
+boncan data 300
+       byte 6,7,8,9
+bonpop data 200
+       byte 10,11,12,13
+bonjel data 200
+       byte 14,15,16,17
+bonice data 200
+       byte 18,19,20,21
+bonnon data 500
+       byte 0,0,0,0
+*
+* Clear the bonus
+*
+nobonu:
+       mov  r11,*r10+
+       li   r1,bonnon
+       mov  *r1+,r0
+       mov  r0,@ttbonu
+       bl   @putbon
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* Write the four characters in r1 to the bonus position
+*
+putbon:
+       mov  r11,*r10+
+       mov  r1,r2
+       li   r0,tnp
+       a    @bonoff,r0
+       bl   @vwad
+       movb *r2+,*r15
+       movb *r2+,*r15
+       li   r0,tnp+32
+       a    @bonoff,r0
+       bl   @vwad
+       movb *r2+,*r15
+       movb *r2+,*r15
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// gstbon

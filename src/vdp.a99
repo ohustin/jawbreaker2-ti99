@@ -1,0 +1,295 @@
+*********************************************************************
+*
+* VDP access and graphics loading
+*
+* The TMS9918A in the TI-99/4A is the same chip as the one in the MSX,
+* the only difference is how the CPU talks to it: the MSX uses I/O
+* ports >98/>99, the TI-99/4A uses the memory mapped addresses >8c00
+* and >8c02.  Everything below is the TI equivalent of the vpoke /
+* outAtoVram / slowotir helpers in msx/VSBIOS.asm.
+*
+*********************************************************************
+
+*********************************************************************
+*
+* Write to a VDP register
+*
+* r0 MSB: register, r0 LSB: value
+*
+vwtr:
+       swpb r0
+       movb r0,@vdpwa
+       swpb r0
+       ori  r0,>8000
+       movb r0,@vdpwa
+       rt
+*// vwtr
+
+*********************************************************************
+*
+* Set the VDP write address (the equivalent of vpoke in the MSX code)
+*
+* r0: VRAM address
+*
+vwad:
+       swpb r0
+       movb r0,@vdpwa
+       swpb r0
+       ori  r0,>4000
+       movb r0,@vdpwa
+       andi r0,>3fff
+       rt
+*// vwad
+
+*********************************************************************
+*
+* Set the VDP read address
+*
+* r0: VRAM address
+*
+vrad:
+       swpb r0
+       movb r0,@vdpwa
+       swpb r0
+       andi r0,>3fff
+       movb r0,@vdpwa
+       rt
+*// vrad
+
+*********************************************************************
+*
+* Write a single byte to VRAM
+*
+* r0: VRAM address, r1 MSB: byte
+*
+vsbw:
+       mov  r11,r9
+       bl   @vwad
+       movb r1,*r15
+       b    *r9
+*// vsbw
+
+*********************************************************************
+*
+* Read a single byte from VRAM
+*
+* r0: VRAM address, returns the byte in the MSB of r1
+*
+vsbr:
+       mov  r11,r9
+       bl   @vrad
+       nop
+       movb @vdprd,r1
+       b    *r9
+*// vsbr
+
+*********************************************************************
+*
+* Write r2 bytes from CPU memory (r1) to VRAM (r0)
+*
+vmbw:
+       mov  r11,r9
+       bl   @vwad
+vmbw1:
+       movb *r1+,*r15
+       dec  r2
+       jne  vmbw1
+       b    *r9
+*// vmbw
+
+*********************************************************************
+*
+* Write the byte in the MSB of r1 to VRAM r2 times, starting at r0
+*
+vsmw:
+       mov  r11,r9
+       bl   @vwad
+vsmw1:
+       movb r1,*r15
+       dec  r2
+       jne  vsmw1
+       b    *r9
+*// vsmw
+
+*********************************************************************
+*
+* Set up graphics II (MSX "screen 2") with the MSX VRAM layout
+*
+vdpini:
+       mov  r11,r9
+       li   r0,>0002                   ; Graphics II
+       bl   @vwtr
+       li   r0,>01c2                   ; 16K, display on, 16x16 sprites
+       bl   @vwtr
+       li   r1,>c200
+       movb r1,@vdpr1
+       li   r0,>0206                   ; Name table at >1800
+       bl   @vwtr
+       li   r0,>03ff                   ; Colour table at >2000
+       bl   @vwtr
+       li   r0,>0403                   ; Pattern table at >0000
+       bl   @vwtr
+       li   r0,>0536                   ; Sprite attributes at >1b00
+       bl   @vwtr
+       li   r0,>0607                   ; Sprite patterns at >3800
+       bl   @vwtr
+       li   r0,>0701                   ; Black backdrop
+       bl   @vwtr
+       b    *r9
+*// vdpini
+
+*********************************************************************
+*
+* Sprite size control, the equivalent of largesprites / smallsprites
+*
+* Jawbreaker II uses magnified 16x16 sprites (32x32 pixels on screen),
+* Jawbreaker I uses them unmagnified.
+*
+larspr:
+       movb @vdpr1,r0
+       ori  r0,>0300                   ; 16x16, magnified
+       jmp  setr1
+smlspr:
+       movb @vdpr1,r0
+       andi r0,>feff
+       ori  r0,>0200                   ; 16x16, not magnified
+       jmp  setr1
+enascr:
+       movb @vdpr1,r0
+       ori  r0,>4000                   ; Display on
+       jmp  setr1
+disscr:
+       movb @vdpr1,r0
+       andi r0,>bfff                   ; Display off
+setr1:
+       movb r0,@vdpr1
+       srl  r0,8
+       ai   r0,>0100
+       b    @vwtr
+*// larspr, smlspr, enascr, disscr
+
+*********************************************************************
+*
+* Load all patterns and colours into VRAM
+*
+* Graphics II splits the screen into three blocks of 256 characters,
+* each with its own pattern and colour data, so everything is loaded
+* three times, exactly like set_tgp / set_tc in msx/level.asm.
+*
+lodgfx:
+       mov  r11,r8
+       clr  r7                         ; Block offset: 0, >800, >1000
+lodgf1:
+*      Patterns
+       li   r0,tgp
+       a    r7,r0
+       li   r1,tiles_pat                  ; Playfield tiles, chars 0-31
+       li   r2,256
+       bl   @b1copy
+       li   r0,tgp+(32*8)
+       a    r7,r0
+       li   r1,font_pat                  ; Font, chars 32-95
+       li   r2,512
+       bl   @b1copy
+       li   r0,tgp+(128*8)
+       a    r7,r0
+       li   r1,tiles_pat2                  ; Title tiles, chars 128-159
+       li   r2,256
+       bl   @b1copy
+*      Colours
+       li   r0,tc
+       a    r7,r0
+       li   r1,tiles_col
+       li   r2,256
+       bl   @b1copy
+       li   r0,tc+(32*8)
+       a    r7,r0
+       li   r1,>f000                   ; White on transparent for the font
+       li   r2,512
+       bl   @vsmw
+       li   r0,tc+(128*8)
+       a    r7,r0
+       li   r1,tiles_col2
+       li   r2,256
+       bl   @b1copy
+*      Next block
+       ai   r7,>0800
+       ci   r7,>1800
+       jne  lodgf1
+*      The title letters live in chars 160-172
+       bl   @lodtit
+       b    *r8
+*// lodgfx
+
+*********************************************************************
+*
+* Copy the letters of "JAWBREAKER II" from the font into chars
+* 160-172 of every pattern block, so that the title can be shown in
+* its own animated colours (see coleff in screens.a99).
+*
+lodtit:
+       mov  r11,*r10+                  ; lodgfx is using r8
+       clr  r7
+lodti1:
+       li   r5,titchr                  ; Table of characters
+       li   r4,160*8                   ; Destination character
+lodti2:
+       movb *r5+,r1
+       jeq  lodti3
+       srl  r1,8
+       ai   r1,-32
+       sla  r1,3
+       ai   r1,font_pat                  ; Source in the font
+       mov  r1,r3
+       li   r0,tgp
+       a    r7,r0
+       a    r4,r0
+       mov  r3,r1
+       li   r2,8
+       bl   @b1copy
+       ai   r4,8
+       jmp  lodti2
+lodti3:
+       ai   r7,>0800
+       ci   r7,>1800
+       jne  lodti1
+       dect r10
+       mov  *r10,r11
+       b    *r11
+titchr text 'JAWBREAKER II'
+       byte 0
+       even
+*// lodtit
+
+*********************************************************************
+*
+* Load the monster sprite patterns for the current level
+*
+* Every fourth level uses a different set of monsters, just like
+* Set_Mst_TGS in msx/sprites.asm.
+*
+setmst:
+       mov  r11,r8
+       li   r1,tgssp0l0
+       movb @level,r2
+       srl  r2,8
+       andi r2,3
+       ci   r2,2
+       jne  setms1
+       li   r1,ntgssp16l0
+setms1:
+       ci   r2,3
+       jne  setms2
+       li   r1,ntgssp0l0
+setms2:
+       mov  r1,r3
+       li   r0,tgs+64                  ; Monsters
+       li   r2,1024
+       bl   @b1copy
+       li   r0,tgs+64+1024             ; Bonus values, tooth brush
+       mov  r3,r1
+       ai   r1,1024
+       li   r2,768
+       bl   @b1copy
+       b    *r8
+*// setmst

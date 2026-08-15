@@ -1,0 +1,398 @@
+*********************************************************************
+*
+* JAWBREAKER I + II DELUXE EDITION - TI-99/4A port
+*
+* Ported from the MSX1 version by Maggoo (MSXDEV 2014), which is
+* itself based on the Sierra On-Line original (1981-83).
+* Original TI-99/4A game concept by Dan Drew.
+*
+* The MSX1 and the TI-99/4A share the same video chip (TMS9918A), so
+* all pattern, colour and sprite data is reused byte for byte and the
+* VRAM layout of the MSX version is kept unchanged.  Sound is the one
+* part that cannot be reused: the AY-3-8910 code is replaced by an
+* SN76489 engine.
+*
+* 16K cartridge, two 8K banks (paged378):
+*   bank 0  >6000-7dff  code
+*   bank 1  >6000-7dff  graphics data
+*   shared  >7e00-7fff  bank switching helpers (identical in both banks)
+*
+* All variables live in the 256 byte scratch pad, so no memory
+* expansion is required.
+*
+*********************************************************************
+
+**
+* Memory mapped addresses
+*
+vdpwd  equ  >8c00                      ; VDP write data
+vdpwa  equ  >8c02                      ; VDP set read/write address
+vdprd  equ  >8800                      ; VDP read data
+vdpsta equ  >8802                      ; VDP status
+sound  equ  >8400                      ; SN76489 sound chip
+
+**
+* VDP memory map (identical to the MSX version)
+*
+tgp    equ  >0000                      ; Pattern table
+tnp    equ  >1800                      ; Name table
+tas    equ  >1b00                      ; Sprite attribute table
+tc     equ  >2000                      ; Colour table
+tgs    equ  >3800                      ; Sprite pattern table
+
+**
+* Monster status
+*
+snorml equ  0                          ; Normal
+sscare equ  1                          ; Scared
+seaten equ  2                          ; Eaten
+
+**
+* Sprite pattern numbers in the sprite generator table
+*
+mstnrm equ  8                          ; Monster, normal
+mstetn equ  8+(4*32)                   ; Monster, eaten
+mst100 equ  8+(4*32)+(4*16)            ; Bonus value 100
+mst200 equ  8+(4*32)+(4*16)+8
+mst400 equ  8+(4*32)+(4*16)+16
+mst800 equ  8+(4*32)+(4*16)+24
+
+**
+* Playfield tiles
+*
+bonusx equ  15                         ; Bonus position in the name table
+bonusy equ  10
+
+**
+* Sound effect numbers
+*
+sfxdot equ  0                          ; Eat dot
+sfxspc equ  1                          ; Eat energizer
+sfxmst equ  2                          ; Eat monster
+sfxdie equ  3                          ; Death
+sfxfin equ  4                          ; Level finished
+sfxstr equ  5                          ; Level start
+sfxmov equ  6                          ; Menu move
+sfxbru equ  7                          ; Tooth brush
+sfxbon equ  8                          ; Eat bonus / extra life
+
+**
+* Game modes (current_mode)
+*
+mgame  equ  0                          ; Playing
+mdeath equ  1                          ; Death sequence
+mend   equ  2                          ; Level finished (tooth brush)
+mmenu  equ  3                          ; Main menu
+mattr  equ  4                          ; Attraction screen
+mready equ  5                          ; "Ready?" / game over
+
+*********************************************************************
+*
+* Scratch pad memory map (>8300->83ff)
+*
+wrksp  equ  >8300                      ; Workspace, r0-r15
+r0lb   equ  wrksp+1                    ; Low byte of r0
+
+**
+* Word variables
+*
+vars   equ  >8320
+timer  equ  vars                       ; Frame counter
+score  equ  timer+2
+hiscor equ  score+2
+nxtlif equ  hiscor+2                   ; Score of next extra life
+ttbonu equ  nxtlif+2                   ; Time till next bonus change
+bonoff equ  ttbonu+2                   ; Bonus offset in the name table
+scrpc  equ  bonoff+2                   ; Animation script program counter
+objfra equ  scrpc+2                    ; Current animation frame pointer
+objspr equ  objfra+2                   ; Current sprite descriptor
+tasptr equ  objspr+2                   ; Write pointer, sprite attributes
+tgsptr equ  tasptr+2                   ; Write pointer, sprite patterns
+jawx   equ  tgsptr+2                   ; Player position
+jawy   equ  jawx+2
+jawsx  equ  jawy+2                     ; Player step
+jawsy  equ  jawsx+2
+objx   equ  jawsy+2                    ; Script object position
+objy   equ  objx+2
+objsx  equ  objy+2
+objsy  equ  objsx+2
+tbrshx equ  objsy+2                    ; Tooth brush x
+
+**
+* Byte variables (value in the most significant byte)
+*
+bvars  equ  tbrshx+2
+lives  equ  bvars+0
+level  equ  bvars+1
+cmode  equ  bvars+2                    ; Current game mode
+gtype  equ  bvars+3                    ; 0 = Jawbreaker II, 2 = Jawbreaker I
+diffic equ  bvars+4                    ; 0 = easy, 1 = hard
+jawmov equ  bvars+5                    ; Player is moving
+jawmcn equ  bvars+6                    ; Steps left in the current move
+jawmod equ  bvars+7                    ; 1 = energizer active
+dots   equ  bvars+8                    ; Dots left to eat
+dsptim equ  bvars+9                    ; Display count down
+dthdly equ  bvars+10                   ; Death / end sequence count down
+scrtim equ  bvars+11                   ; Time left in scare mode
+scrdur equ  bvars+12                   ; Scare duration for this level
+bonmul equ  bvars+13                   ; Monster eaten multiplier
+tascnt equ  bvars+14                   ; Sprite counter
+mstcnt equ  bvars+15                   ; Monster loop counter
+objmod equ  bvars+16                   ; 1 = script animation running
+objmcn equ  bvars+17                   ; Script move counter
+logoy  equ  bvars+18                   ; Y of the Abyss logo
+joyval equ  bvars+19                   ; Last direction read
+vdpr1  equ  bvars+20                   ; Shadow of VDP register 1
+
+**
+* Parameters that depend on the game type.  setpar in level.a99
+* copies them in one go, so the order here must match the tables
+* there.
+*
+parblk equ  bvars+22                   ; +21 is a pad byte, everything
+*                                      ; from here on has to stay word
+*                                      ; aligned for the monster table
+jawsiz equ  parblk+0                   ; Player size in pixels
+maxjwx equ  parblk+1                   ; Playfield limits
+maxjwy equ  parblk+2
+minjwx equ  parblk+3
+minjwy equ  parblk+4
+mspdx  equ  parblk+5                   ; Move speed / step count
+mcntx  equ  parblk+6
+mspdy  equ  parblk+7
+mcnty  equ  parblk+8
+nbrmst equ  parblk+9                   ; Number of monsters
+rowsiz equ  parblk+10                  ; Height of a monster row
+nbrrow equ  parblk+11                  ; Number of monster rows
+parlen equ  12
+
+**
+* Monster table, 6 records of 10 bytes
+*   +0 x (word)  +2 y  +3 status  +4 spare  +5 colour
+*   +6 dx (word) +8 scare timer   +9 spare
+*
+mstdat equ  parblk+parlen
+mstlen equ  10
+
+**
+* Wall openings, 7 records of 2 bytes: x position, direction
+*
+openin equ  mstdat+(6*mstlen)
+opnlen equ  2
+
+**
+* Sound engine state, see sound.a99
+*
+sndvar equ  openin+(7*opnlen)
+sndlen equ  16
+
+**
+* Return address stack (grows up), 8 levels
+*
+stack  equ  sndvar+sndlen
+padend equ  stack+16
+
+*********************************************************************
+*
+* Bank 0 - code
+*
+       bank 0, >6000
+
+**
+* Cartridge header
+*
+       byte >aa,>01,>00,>00
+       data >0000                      ; Power up list
+       data proglt                     ; Program list
+       data >0000                      ; DSR list
+       data >0000                      ; Subprogram list
+       data >0000
+proglt data >0000                      ; No next program
+       data start
+       byte 13
+       text 'JAWBREAKER II'
+       even
+
+*********************************************************************
+*
+* Entry point
+*
+start:
+       limi 0                          ; Interrupts stay off, we poll
+       lwpi wrksp
+       li   r10,stack
+       li   r15,vdpwd
+       bl   @clrpad                    ; Clear all variables
+       bl   @vdpini                    ; Set up graphics II mode
+       bl   @lodgfx                    ; Patterns and colours to VRAM
+       bl   @sndini
+       seto r0
+       movb r0,@diffic                 ; difficulty = -1, nothing selected
+       li   r0,bonusx+(32*bonusy)
+       mov  r0,@bonoff
+       bl   @iattra                    ; Start with the attraction screen
+*
+* Main loop, one pass per video frame
+*
+loop:
+       bl   @wtvbln
+       inc  @timer
+       movb @cmode,r1
+       srl  r1,8
+       sla  r1,1
+       mov  @modtab(r1),r1
+       b    *r1
+modtab data mgame0                     ; 0 Playing
+       data death                      ; 1 Death sequence
+       data endseq                     ; 2 Level finished
+       data gmenu                      ; 3 Main menu
+       data gattra                     ; 4 Attraction screen
+       data dready                     ; 5 Ready / game over
+*
+* Every mode routine jumps back here when done
+*
+frmend:
+       bl   @sndply
+       jmp  loop
+
+*********************************************************************
+*
+* Clear the scratch pad variable area
+*
+clrpad:
+       li   r1,vars
+       li   r2,(padend-vars)/2
+clrpa1:
+       clr  *r1+
+       dec  r2
+       jne  clrpa1
+       rt
+*// clrpad
+
+*********************************************************************
+*
+* Wait for the vertical blanking interrupt flag
+*
+wtvbln:
+       movb @vdpsta,r1                 ; Reading the status clears the flag
+       jlt  wtvbl1
+       jmp  wtvbln
+wtvbl1:
+       rt
+*// wtvbln
+
+*********************************************************************
+*
+* Give me a pseudo random number in r1 (0-255 in the MSB)
+*
+* The MSX version uses whatever ROM byte the frame counter happens to
+* point at, here the frame counter is run through a multiplier instead.
+random:
+       mov  @timer,r1
+       mpy  @rndmul,r1                 ; r1:r2 = timer * 31421
+       ai   r2,6927
+       mov  r2,r1
+       srl  r1,8
+       rt
+rndmul data 31421
+*// random
+
+       copy "vdp.a99"
+       copy "input.a99"
+       copy "text.a99"
+       copy "sprite.a99"
+       copy "game.a99"
+       copy "screens.a99"
+       copy "level.a99"
+       copy "sound.a99"
+
+*********************************************************************
+*
+* Bank 1 - graphics data
+*
+       bank 1
+
+       copy "data.a99"
+       copy "gfx-tiles.a99"
+       copy "gfx-sprites.a99"
+
+*********************************************************************
+*
+* Shared segment, identical code in both banks
+*
+       bank all, >7e00
+
+**
+* Copy from bank 1 to VRAM
+*
+* r0: VRAM write address
+* r1: Bank 1 source address
+* r2: Number of bytes
+*
+b1copy:
+       mov  r11,r9
+       clr  @>6002                     ; Select bank 1
+       movb @r0lb,@vdpwa
+       ori  r0,>4000
+       movb r0,@vdpwa
+b1cop1:
+       movb *r1+,*r15
+       dec  r2
+       jne  b1cop1
+       clr  @>6000                     ; Back to bank 0
+       b    *r9
+*// b1copy
+
+**
+* Copy a single 32 byte sprite pattern from bank 1 to VRAM
+*
+* r0: VRAM write address
+* r1: Bank 1 source address
+*
+b1pat:
+       li   r2,32
+       jmp  b1copy
+*// b1pat
+
+**
+* Print a zero terminated bank 1 string
+*
+* r0: name table offset
+* r1: string address in bank 1
+*
+b1prnt:
+       mov  r11,r9
+       ai   r0,tnp
+       swpb r0
+       movb r0,@vdpwa
+       swpb r0
+       ori  r0,>4000
+       movb r0,@vdpwa
+       clr  @>6002                     ; Select bank 1
+b1prn1:
+       movb *r1+,r2
+       jeq  b1prn2
+       movb r2,*r15
+       jmp  b1prn1
+b1prn2:
+       clr  @>6000                     ; Back to bank 0
+       b    *r9
+*// b1prnt
+
+**
+* Copy a bank 1 table into the scratch pad
+*
+* r1: source in bank 1, r2: destination, r3: number of bytes
+*
+b1ram:
+       mov  r11,r9
+       clr  @>6002
+b1ram1:
+       movb *r1+,*r2+
+       dec  r3
+       jne  b1ram1
+       clr  @>6000
+       b    *r9
+*// b1ram
+
+       end

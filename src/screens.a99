@@ -1,0 +1,846 @@
+*********************************************************************
+*
+* Attraction screen, menu, ready screen, death and level end
+*
+* Port of the screen handling in msx/Jawbreak2.ASM and of the little
+* script interpreter in msx/Code/animate.asm.
+*
+*********************************************************************
+
+*********************************************************************
+*
+* Attraction screen
+*
+iattra:
+       mov  r11,*r10+
+       clr  r0
+       movb r0,@gtype
+       bl   @clrscr
+       bl   @smlspr
+       li   r0,(2*32)+6
+       li   r1,attra1
+       bl   @b1prnt
+       li   r0,(3*32)+6
+       li   r1,attra2
+       bl   @b1prnt
+       li   r1,attscr                  ; Start the intro script
+       bl   @scrini
+       li   r0,16
+       mov  r0,@jawy
+       li   r0,16*256
+       movb r0,@logoy
+       li   r0,mattr*256
+       movb r0,@cmode
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// iattra
+
+gattra:
+       bl   @rdfire                    ; Any key goes to the menu
+       jne  gattr1
+       bl   @rddir
+       mov  r1,r1
+       jne  gattr1
+       bl   @initspr
+       bl   @screxe
+       li   r6,logo                    ; The Abyss logo
+       li   r3,48
+       movb @logoy,r4
+       srl  r4,8
+       bl   @putspr
+       bl   @coleff
+       b    @frmend
+gattr1:
+       bl   @imenu
+       b    @frmend
+*// gattra
+
+*********************************************************************
+*
+* Main menu
+*
+imenu:
+       mov  r11,*r10+
+       bl   @clrscr
+       bl   @larspr
+       bl   @sethrn                    ; Hard is the default
+       bl   @prttit
+       li   r0,(7*32)+10
+       li   r1,strmod
+       bl   @b1prnt
+       li   r0,(17*32)+5
+       li   r1,strpt1
+       bl   @b1prnt
+       li   r0,(17*32)+17
+       li   r1,strpt2
+       bl   @b1prnt
+       li   r0,(19*32)+5
+       li   r1,strpt3
+       bl   @b1prnt
+       li   r0,(20*32)+5
+       li   r1,strpt4
+       bl   @b1prnt
+       li   r0,(19*32)+17
+       li   r1,strpt5
+       bl   @b1prnt
+       li   r0,(20*32)+17
+       li   r1,strpt6
+       bl   @b1prnt
+       li   r0,(22*32)+2
+       li   r1,strsie
+       bl   @b1prnt
+       li   r0,(10*32)+7
+       li   r1,strudm
+       bl   @b1prnt
+       bl   @prtaut
+       li   r0,(15*32)+9
+       li   r1,strhig
+       bl   @b1prnt
+       mov  @hiscor,r3
+       bl   @dsp5
+       clr  r0
+       movb r0,@jawmod
+       li   r0,mmenu*256
+       movb r0,@cmode
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* The title, and the name of the author of the original game, depend
+* on which of the two games is selected
+*
+prttit:
+       mov  r11,*r10+
+       li   r1,strtt0
+       movb @gtype,r0
+       jeq  prttt1
+       li   r1,strtt2
+prttt1:
+       li   r0,(2*32)+9
+       bl   @b1prnt
+       dect r10
+       mov  *r10,r11
+       b    *r11
+prtaut:
+       mov  r11,*r10+
+       li   r1,strau0
+       movb @gtype,r0
+       jeq  prtau1
+       li   r1,strau2
+prtau1:
+       li   r0,(23*32)+2
+       bl   @b1prnt
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// imenu
+
+gmenu:
+       bl   @jawbnc                    ; The player bounces on the spot
+       bl   @rddir
+       ci   r1,3
+       jne  gmenu1
+       bl   @sethrd
+       jmp  gmenu4
+gmenu1:
+       ci   r1,7
+       jne  gmenu2
+       bl   @setesy
+       jmp  gmenu4
+gmenu2:
+       ci   r1,5
+       jne  gmenu3
+       bl   @setgt0
+       jmp  gmenu4
+gmenu3:
+       ci   r1,1
+       jne  gmenu4
+       bl   @setgt2
+gmenu4:
+       bl   @coleff
+       bl   @initspr
+       li   r6,jaw1
+       mov  @timer,r0
+       andi r0,8
+       jne  gmenu5
+       li   r6,jaw2
+gmenu5:
+       mov  @jawx,r3
+       mov  @jawy,r4
+       bl   @putspr
+       bl   @animdt
+       movb @jawmod,r0
+       jne  gmenu8                     ; The game is about to start
+*      Blink "press any key"
+       li   r1,strany
+       mov  @timer,r0
+       andi r0,>0020
+       jeq  gmenu6
+       li   r1,strbnk
+gmenu6:
+       li   r0,(12*32)+2
+       bl   @b1prnt
+       bl   @rdfire
+       jeq  gmenu7
+       li   r1,sfxstr
+       bl   @sfxini
+       li   r0,>0100
+       movb r0,@jawmod
+       li   r0,120*256
+       movb r0,@dsptim
+gmenu7:
+       b    @frmend
+*
+* Blink faster, then start the game
+*
+gmenu8:
+       li   r1,strany
+       mov  @timer,r0
+       andi r0,>0004
+       jeq  gmenu9
+       li   r1,strbnk
+gmenu9:
+       li   r0,(12*32)+2
+       bl   @b1prnt
+       movb @dsptim,r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@dsptim
+       jne  gmenu7
+       bl   @gamini
+       b    @frmend
+*// gmenu
+
+*
+* The player sprite is the menu cursor: next to HARD or next to EASY
+*
+sethrd:
+       mov  r11,*r10+
+       movb @diffic,r0
+       srl  r0,8
+       ci   r0,1
+       jeq  sethr1
+       li   r1,sfxmov
+       bl   @sfxini
+       bl   @sethrn
+sethr1:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* Same thing without the sound, used when the menu opens
+*
+sethrn:
+       li   r0,>0100
+       movb r0,@diffic
+       li   r0,172
+       mov  r0,@jawx
+       li   r0,44
+       mov  r0,@jawy
+       clr  @jawsy
+       rt
+setesy:
+       mov  r11,*r10+
+       movb @diffic,r0
+       jeq  setes1
+       clr  r0
+       movb r0,@diffic
+       li   r0,42
+       mov  r0,@jawx
+       li   r0,44
+       mov  r0,@jawy
+       clr  @jawsy
+       li   r1,sfxmov
+       bl   @sfxini
+setes1:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* Switch between Jawbreaker II and Jawbreaker I
+*
+setgt0:
+       mov  r11,*r10+
+       movb @gtype,r0
+       jeq  setgt1
+       clr  r0
+       movb r0,@gtype
+       li   r1,sfxdot
+       bl   @sfxini
+       bl   @prttit
+       bl   @prtaut
+setgt1:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+setgt2:
+       mov  r11,*r10+
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jeq  setgt3
+       li   r0,2*256
+       movb r0,@gtype
+       li   r1,sfxdot
+       bl   @sfxini
+       bl   @prttit
+       bl   @prtaut
+setgt3:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* The MSX version makes the player bounce in time with the drum of
+* the title music.  Without the music it bounces on the frame count.
+*
+jawbnc:
+       mov  @jawsy,r0
+       jne  jawbn1
+       mov  @timer,r0
+       andi r0,31
+       jne  jawbn2
+       li   r0,44-16
+       mov  r0,@jawy
+       li   r0,1
+       mov  r0,@jawsy
+       jmp  jawbn2
+jawbn1:
+       inc  @jawsy
+       mov  @jawsy,r0
+       a    r0,@jawy
+       mov  @jawy,r0
+       ci   r0,44
+       jl   jawbn2
+       li   r0,44
+       mov  r0,@jawy
+       clr  @jawsy
+jawbn2:
+       rt
+*// jawbnc
+
+*********************************************************************
+*
+* Ready screen, also used for game over
+*
+dready:
+       bl   @clrspr
+       li   r0,(13*32)+11
+       li   r1,strrdy
+       bl   @b1prnt
+       li   r0,(12*32)+11
+       li   r1,strbl2
+       bl   @b1prnt
+       li   r0,(11*32)+11
+       li   r1,strspc
+       bl   @b1prnt
+       movb @lives,r3
+       srl  r3,8
+       bl   @dsp3
+       li   r0,(11*32)+15
+       li   r1,strlft
+       bl   @b1prnt
+       li   r0,(10*32)+11
+       li   r1,strlev
+       bl   @b1prnt
+       movb @level,r3
+       srl  r3,8
+       bl   @dsp3
+       movb @lives,r0
+       jne  dread1
+       li   r0,(13*32)+11
+       li   r1,strgov
+       bl   @b1prnt
+dread1:
+       movb @dsptim,r0
+       srl  r0,8
+       dec  r0
+       jeq  dread2
+       sla  r0,8
+       movb r0,@dsptim
+       b    @frmend
+*
+* Count down finished: back to the game, or back to the attraction
+* screen when all lives are gone
+*
+dread2:
+       bl   @restxt                    ; Put the playfield back
+       movb @lives,r0
+       jne  dread3
+       bl   @iattra
+       b    @frmend
+dread3:
+       bl   @lvlrst
+       b    @frmend
+*// dready
+
+*
+* The ready text is written over the middle of the playfield, so the
+* four rows underneath are parked in unused video memory
+*
+vsave  equ  >1c00
+savtxt:
+       mov  r11,*r10+
+       li   r0,tnp+(10*32)
+       li   r1,vsave
+       li   r2,128
+       bl   @vcopy
+       dect r10
+       mov  *r10,r11
+       b    *r11
+restxt:
+       mov  r11,*r10+
+       li   r0,vsave
+       li   r1,tnp+(10*32)
+       li   r2,128
+       bl   @vcopy
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* Copy r2 bytes inside video memory, from r0 to r1
+*
+vcopy:
+       mov  r11,*r10+
+       mov  r0,r5                      ; Source
+       mov  r1,r6                      ; Destination
+vcopy1:
+       mov  r5,r0
+       bl   @vsbr
+       mov  r1,r7
+       mov  r6,r0
+       mov  r7,r1
+       bl   @vsbw
+       inc  r5
+       inc  r6
+       dec  r2
+       jne  vcopy1
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// savtxt, restxt
+
+*********************************************************************
+*
+* Death sequence: the player breaks in two and the bottom half falls
+*
+death:
+       bl   @nobonu
+       bl   @initspr
+       li   r6,jawdt1
+       mov  @jawx,r3
+       mov  @jawy,r4
+       bl   @putspr
+       mov  @jawy,r4
+       a    @jawsy,r4
+       ci   r4,192
+       jhe  death1
+       li   r0,2                       ; The bottom half picks up speed
+       a    r0,@jawsy
+       li   r6,jawdt2
+       mov  @jawx,r3
+       bl   @putspr
+       b    @frmend
+death1:
+       bl   @savtxt
+       li   r0,100*256
+       movb r0,@dsptim
+       li   r0,mready*256
+       movb r0,@cmode
+       b    @frmend
+*// death
+
+*********************************************************************
+*
+* Level finished: the tooth brush comes in and scrubs the teeth
+*
+endseq:
+       bl   @initspr
+       mov  @tbrshx,r0
+       c    r0,@jawx
+       jl   endse1
+       ai   r0,-2                      ; Move towards the player
+       mov  r0,@tbrshx
+endse1:
+       mov  @jawy,r4
+       inct r4
+       mov  @tbrshx,r3
+       c    r3,@jawx
+       jh   endse2
+       bl   @scrub                     ; Close enough to scrub
+endse2:
+       li   r6,tbrush
+       movb @gtype,r0
+       jeq  endse3
+       li   r6,tbrsh2                  ; The small brush
+endse3:
+       bl   @putspr
+       li   r6,jaw1
+       mov  @jawx,r3
+       mov  @jawy,r4
+       bl   @putspr
+       movb @dthdly,r0
+       jne  endse4
+       bl   @nxtlvl
+endse4:
+       b    @frmend
+*
+* Scrubbing: shake the brush and count down
+*
+scrub:
+       movb @dthdly,r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@dthdly
+       mov  @timer,r0
+       andi r0,8
+       jeq  scrub1
+       inc  r3                         ; Shake
+       inc  r3
+       inc  r3
+       inc  r3
+       rt
+scrub1:
+       mov  r11,*r10+
+       li   r1,sfxbru
+       bl   @sfxini
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// endseq
+
+*********************************************************************
+*
+* Colour cycling on the title letters, characters 160 and up
+*
+coleff:
+       mov  r11,*r10+
+       li   r0,tc+(128*8)+(32*8)
+       bl   @vwad
+       mov  @timer,r1
+       andi r1,15
+       ai   r1,colseq
+       li   r2,15                      ; 15 characters
+colef1:
+       movb *r1+,r3
+       li   r4,8                       ; 8 lines each
+colef2:
+       movb r3,*r15
+       dec  r4
+       jne  colef2
+       dec  r2
+       jne  colef1
+       dect r10
+       mov  *r10,r11
+       b    *r11
+colseq byte 15*16,14*16,7*16,5*16,4*16,4*16,1*16,1*16
+       byte 6*16,6*16,8*16,8*16,9*16,11*16,15*16
+       byte 15*16,14*16,7*16,5*16,4*16,4*16,1*16,1*16
+       byte 6*16,6*16,8*16,8*16,9*16,11*16,15*16
+       even
+*// coleff
+
+*********************************************************************
+*
+* Script interpreter for the intro
+*
+* Every instruction is one word of opcode plus its operands:
+*
+*   1 x y            put the object at x, y
+*   2 sx sy count    move it
+*   3 frames         start an animation
+*   4 routine        call a subroutine
+*   5 address        jump
+*
+scrini:
+       mov  r1,@scrpc
+       clr  r0
+       movb r0,@objmcn
+       movb r0,@objmod
+       li   r0,217
+       mov  r0,@objy
+       clr  @objsx
+       clr  @objx
+       clr  @objsy
+       rt
+*// scrini
+
+screxe:
+       mov  r11,*r10+
+       movb @objmcn,r0
+       jne  screx1
+       bl   @scrnxt
+screx1:
+       movb @objmod,r0
+       jeq  screx2
+       bl   @objani
+screx2:
+       mov  @objsx,r0
+       a    r0,@objx
+       mov  @objsy,r0
+       a    r0,@objy
+       mov  @objspr,r6
+       jeq  screx3
+       mov  @objx,r3
+       mov  @objy,r4
+       bl   @putspr
+screx3:
+       movb @objmcn,r0
+       srl  r0,8
+       dec  r0
+       sla  r0,8
+       movb r0,@objmcn
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* Next frame of the current animation
+*
+objani:
+       mov  @objfra,r1
+       mov  *r1,r0
+       jne  objan1
+       inct r1                         ; End of the list, loop back
+       mov  *r1,r1
+objan1:
+       mov  *r1+,@objspr
+       mov  r1,@objfra
+       rt
+*// objani
+
+*
+* Run script instructions until one of them takes time
+*
+scrnxt:
+       mov  r11,*r10+
+scrnx1:
+       mov  @scrpc,r1
+       mov  *r1+,r0
+       ci   r0,1
+       jne  scrnx2
+       mov  *r1+,@objx                 ; Set position
+       mov  *r1+,@objy
+       mov  r1,@scrpc
+       jmp  scrnx1
+scrnx2:
+       ci   r0,2
+       jne  scrnx3
+       mov  *r1+,@objsx                ; Move
+       mov  *r1+,@objsy
+       mov  *r1+,r0
+       sla  r0,8
+       movb r0,@objmcn
+       mov  r1,@scrpc
+       jmp  scrnx9
+scrnx3:
+       ci   r0,3
+       jne  scrnx4
+       mov  *r1+,@objfra               ; Animation
+       li   r0,>0100
+       movb r0,@objmod
+       mov  r1,@scrpc
+       jmp  scrnx1
+scrnx4:
+       ci   r0,4
+       jne  scrnx5
+       mov  *r1+,r2                    ; Call
+       mov  r1,@scrpc
+       bl   *r2
+       jmp  scrnx1
+scrnx5:
+       mov  *r1,@scrpc                 ; Jump
+       jmp  scrnx1
+scrnx9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// scrnxt
+
+*********************************************************************
+*
+* The intro script
+*
+munchl data jaw1,jaw1,jaw1,jaw1
+       data jaw2,jaw2,jaw2,jaw2
+       data 0
+       data munchl
+
+munchv data jawv1,jawv1,jawv1,jawv1
+       data jawv2,jawv2,jawv2,jawv2
+       data 0
+       data munchv
+
+attscr data 1,255,16                   ; Start at the right hand side
+       data 3,munchl
+       data 2,-2,0,40                  ; Eat the first pair of sweets
+       data 4,eat1
+       data 4,intr1n
+       data 2,0,0,8
+       data 4,intr1f
+       data 2,0,0,8
+       data 4,intr1n
+       data 2,0,0,8
+       data 4,intr1f
+       data 2,0,0,8
+       data 4,intr1n
+       data 2,0,0,8
+       data 2,-2,0,16
+       data 4,eat2
+       data 4,intr2n
+       data 2,0,0,8
+       data 4,intr2f
+       data 2,0,0,8
+       data 4,intr2n
+       data 2,0,0,8
+       data 4,intr2f
+       data 2,0,0,8
+       data 4,intr2n
+       data 2,0,0,8
+       data 2,-2,0,16
+       data 4,eat3
+       data 4,intr3n
+       data 2,0,0,8
+       data 4,intr3f
+       data 2,0,0,8
+       data 4,intr3n
+       data 2,0,0,8
+       data 4,intr3f
+       data 2,0,0,8
+       data 4,intr3n
+       data 2,0,0,8
+       data 2,0,0,10
+       data 2,-2,0,16
+       data 4,eat4
+       data 4,intr4n
+       data 2,0,0,8
+       data 4,intr4f
+       data 2,0,0,8
+       data 4,intr4n
+       data 2,0,0,8
+       data 4,intr4f
+       data 2,0,0,8
+       data 4,intr4n
+       data 2,0,0,8
+       data 2,0,0,50
+       data 2,-2,0,15
+       data 4,eat5
+       data 2,0,0,20
+*      The title builds up letter by letter
+       data 2,24,0,2
+       data 4,jbt1
+       data 2,8,0,2
+       data 4,jbt2
+       data 2,8,0,2
+       data 4,jbt3
+       data 2,8,0,2
+       data 4,jbt4
+       data 2,8,0,2
+       data 4,jbt5
+       data 2,8,0,2
+       data 4,jbt6
+       data 2,8,0,2
+       data 2,0,0,10
+       data 4,intr5f
+       data 2,0,0,10
+       data 4,intr4f
+       data 2,0,0,10
+       data 4,intr3f
+       data 2,0,0,10
+       data 4,intr2f
+       data 2,0,0,10
+       data 4,intr1f
+       data 3,munchv
+       data 2,0,2,16
+       data 3,munchl
+       data 2,-1,0,16
+       data 4,imenu
+attrlp data 2,0,0,50
+       data 5,attrlp
+
+*
+* Credit lines, switched on and off by the script
+*
+intr1n li   r0,(10*32)+2
+       li   r1,strin1
+       b    @b1prnt
+intr1f li   r0,(10*32)+2
+       li   r1,strinf
+       b    @b1prnt
+intr2n li   r0,(12*32)+2
+       li   r1,strin2
+       b    @b1prnt
+intr2f li   r0,(12*32)+2
+       li   r1,strinf
+       b    @b1prnt
+intr3n li   r0,(14*32)+2
+       li   r1,strin3
+       b    @b1prnt
+intr3f li   r0,(14*32)+2
+       li   r1,strinf
+       b    @b1prnt
+intr4n mov  r11,*r10+
+       li   r0,(16*32)+2
+       li   r1,strin4
+       bl   @b1prnt
+       li   r0,(18*32)+2
+       li   r1,strin5
+       bl   @b1prnt
+       dect r10
+       mov  *r10,r11
+       b    *r11
+intr4f mov  r11,*r10+
+       li   r0,(16*32)+2
+       li   r1,strinf
+       bl   @b1prnt
+       dect r10
+       mov  *r10,r11
+       b    *r11
+intr5f li   r0,(18*32)+2
+       li   r1,strinf
+       b    @b1prnt
+*
+* Rub out the pair of sweets the player has just eaten
+*
+eat1   li   r5,22
+       jmp  eatswt
+eat2   li   r5,18
+       jmp  eatswt
+eat3   li   r5,14
+       jmp  eatswt
+eat4   li   r5,10
+       jmp  eatswt
+eat5   li   r0,200*256
+       movb r0,@logoy                  ; Park the logo off screen
+       li   r5,6
+eatswt:
+       mov  r11,*r10+
+       li   r0,(2*32)
+       a    r5,r0
+       li   r1,strbl3
+       bl   @b1prnt
+       li   r0,(3*32)
+       a    r5,r0
+       li   r1,strbl3
+       bl   @b1prnt
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+* The title grows two letters at a time
+*
+jbt1   li   r1,strt1
+       jmp  jbtprt
+jbt2   li   r1,strt2
+       jmp  jbtprt
+jbt3   li   r1,strt3
+       jmp  jbtprt
+jbt4   li   r1,strt4
+       jmp  jbtprt
+jbt5   li   r1,strt5
+       jmp  jbtprt
+jbt6   li   r1,strt6
+jbtprt li   r0,(2*32)+9
+       b    @b1prnt
+

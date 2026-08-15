@@ -1,0 +1,147 @@
+*********************************************************************
+*
+* Keyboard and joystick
+*
+* The MSX version reads the cursor keys first and falls back to
+* joystick port 1 (msx/VSBIOS.asm, Read_Joystick_Keyboard).  This is
+* the TI-99/4A equivalent, reading the 9901 CRU directly.  The
+* direction codes are the same as the MSX ones so that the game logic
+* did not have to change:
+*
+*   0 = nothing, 1 = up, 3 = right, 5 = down, 7 = left
+*
+*   Column   0      1    2    3    4    5     6       7
+* Row
+* >0006      =      .    ,    M    N    /    Fire    Fire
+* >0008    Space    L    K    J    H    ;    Left    Left
+* >000A    Enter    O    I    U    Y    P    Right   Right
+* >000C             9    8    7    6    0    Down    Down
+* >000E    Fctn     2    3    4    5    1    Up      Up
+* >0010    Shift    S    D    F    G    A
+* >0012    Ctrl     W    E    R    T    Q
+* >0014             X    C    V    B    Z
+*
+*********************************************************************
+
+keyfir equ  >0606                      ; Joystick 1
+keylft equ  >0608
+keyrgt equ  >060a
+keydwn equ  >060c
+keyup  equ  >060e
+keye   equ  >0212                      ; E - up
+keys   equ  >0110                      ; S - left
+keyd   equ  >0210                      ; D - right
+keyx   equ  >0114                      ; X - down
+keyspc equ  >0008                      ; Space
+keyent equ  >000a                      ; Enter
+
+*********************************************************************
+*
+* Test a single key
+*
+* r0: column in the MSB, row CRU address in the LSB
+* Returns NEQ when the key is pressed
+*
+chkkey:
+       li   r12,>0024                  ; Column decoder
+       ldcr r0,3
+       andi r0,>00ff
+       mov  r0,r12
+       tb   0
+       rt
+*// chkkey
+
+*********************************************************************
+*
+* Read the direction, result in r1 (0, 1, 3, 5, 7)
+*
+rddir:
+       mov  r11,*r10+
+       clr  r1
+       li   r0,keyup                   ; Joystick up
+       bl   @chkkey
+       jne  rddir1
+       li   r0,keye                    ; E
+       bl   @chkkey
+       jeq  rddir2
+rddir1:
+       li   r1,1
+       jmp  rddir9
+rddir2:
+       li   r0,keyrgt                  ; Joystick right
+       bl   @chkkey
+       jne  rddir3
+       li   r0,keyd                    ; D
+       bl   @chkkey
+       jeq  rddir4
+rddir3:
+       li   r1,3
+       jmp  rddir9
+rddir4:
+       li   r0,keydwn                  ; Joystick down
+       bl   @chkkey
+       jne  rddir5
+       li   r0,keyx                    ; X
+       bl   @chkkey
+       jeq  rddir6
+rddir5:
+       li   r1,5
+       jmp  rddir9
+rddir6:
+       li   r0,keylft                  ; Joystick left
+       bl   @chkkey
+       jne  rddir7
+       li   r0,keys                    ; S
+       bl   @chkkey
+       jeq  rddir9
+rddir7:
+       li   r1,7
+rddir9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// rddir
+
+*********************************************************************
+*
+* Read the fire button, returns NEQ when pressed
+*
+* The result is returned in r1 as well as in the flags, because
+* popping the return address off the stack destroys the flags.
+*
+rdfire:
+       mov  r11,*r10+
+       clr  r1
+       li   r0,keyfir                  ; Joystick fire
+       bl   @chkkey
+       jne  rdfir1
+       li   r0,keyspc                  ; Space
+       bl   @chkkey
+       jne  rdfir1
+       li   r0,keyent                  ; Enter
+       bl   @chkkey
+       jeq  rdfir2
+rdfir1:
+       li   r1,1
+rdfir2:
+       dect r10
+       mov  *r10,r11
+       mov  r1,r1                      ; Sets EQ when nothing is pressed
+       b    *r11
+*// rdfire
+
+*********************************************************************
+*
+* Returns NEQ when fire or any direction is pressed
+*
+anykey:
+       mov  r11,*r10+
+       bl   @rdfire
+       jne  anyke1
+       bl   @rddir
+anyke1:
+       dect r10
+       mov  *r10,r11
+       mov  r1,r1                      ; Sets EQ when nothing is pressed
+       b    *r11
+*// anykey

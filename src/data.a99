@@ -1,0 +1,194 @@
+*********************************************************************
+*
+* Read only data that lives in the graphics bank
+*
+* Strings are printed with b1prnt and tables are copied into the
+* scratch pad with b1ram, both of which live in the shared segment
+* and switch banks around the access.
+*
+*********************************************************************
+
+*********************************************************************
+*
+* Strings
+*
+* Characters below 32 are playfield tiles: 4 is a dot, 5 an
+* energizer, 6 and up are the sweets, 22 and up the monsters.
+* Characters 160 and up are the letters of the title.
+*
+strtt0 byte 160,161,162,163,164,165,166,167,168,169,170,171,172,0
+strtt2 byte 32,160,161,162,163,164,165,166,167,168,169,170,32,0
+strany text '   PRESS ANY KEY TO START   '
+       byte 0
+strbnk text '                            '
+       byte 0
+strudm text 'UP/DOWN - MODE'
+       byte 0
+strsie text '@ 1981-83 SIERRA ON-LINE INC'
+       byte 0
+strau0 text '  ORIGINAL GAME BY DAN DREW   '
+       byte 0
+strau2 text 'ORIGINAL GAME BY JOHN HARRIS'
+       byte 0
+strpt1 byte 4
+       text '   10 PTS'
+       byte 0
+strpt2 byte 5
+       text '  100 PTS'
+       byte 0
+strpt3 byte 6,7
+       text ' 200 PTS'
+       byte 0
+strpt4 byte 8,9,0
+strpt5 byte 14,15
+       text ' 400 PTS'
+       byte 0
+strpt6 byte 16,17,0
+strmod text 'EASY - HARD'
+       byte 0
+strhig text 'HIGHSCORE  '
+       byte 0
+attra1 byte 22,23,32,32,6,7,32,32,10,11,32,32,14,15,32,32,18,19,0
+attra2 byte 24,25,32,32,8,9,32,32,12,13,32,32,16,17,32,32,20,21,0
+strlft text '  LEFT '
+       byte 0
+strlev text ' LEVEL '
+       byte 0
+strspc text ' '
+       byte 0
+strrdy text '  READY ?  '
+       byte 0
+strbl2 text '            '
+       byte 0
+strbl3 text '  '
+       byte 0
+strgov text ' GAME OVER '
+       byte 0
+strin1 text '* MSX CODE.........MAGGOO *'
+       byte 0
+strin2 text '* MUSIC....TONI CABALLERO *'
+       byte 0
+strin3 text '* ARTWORK.......ERIC BOEZ *'
+       byte 0
+strin4 text '* TESTING.......SKYEWELSE *'
+       byte 0
+strin5 text '* .................MASAXI *'
+       byte 0
+strinf text '                           '
+       byte 0
+strt1  byte 160,161,0
+strt2  byte 160,161,162,163,0
+strt3  byte 160,161,162,163,164,165,0
+strt4  byte 160,161,162,163,164,165,166,167,0
+strt5  byte 160,161,162,163,164,165,166,167,168,169,0
+strt6  byte 160,161,162,163,164,165,166,167,168,169,170,171,172,0
+       even
+
+
+strscr text 'SCORE  '
+       byte 0
+       even
+
+
+ini1tb byte 32                         ; jawsiz
+       byte 256-32                     ; maxjwx
+       byte 40*4                       ; maxjwy
+       byte 0                          ; minjwx
+       byte 0                          ; minjwy
+       byte 4                          ; mspdx
+       byte 4                          ; mcntx
+       byte 8                          ; mspdy, one row is 5 x 8 pixels
+       byte 5                          ; mcnty
+       byte 4                          ; nbrmst
+       byte 40                         ; rowsiz
+       byte 5                          ; nbrrow
+       even
+
+
+ini2tb byte 16                         ; jawsiz
+       byte 256-16                     ; maxjwx
+       byte 24*7                       ; maxjwy
+       byte 8                          ; minjwx
+       byte 0                          ; minjwy
+       byte 4                          ; mspdx
+       byte 4                          ; mcntx
+       byte 4                          ; mspdy
+       byte 6                          ; mcnty
+       byte 4                          ; nbrmst
+       byte 24                         ; rowsiz
+       byte 8                          ; nbrrow
+       even
+
+
+*********************************************************************
+*
+* Start positions
+*
+* Openings: x position, direction
+*
+stopn1 byte 5*8,4
+       byte 16*8,-4
+       byte 5*8,4
+       byte 16*8,-4
+
+stopn2 byte 14*8,1
+       byte 5*8,-2
+       byte 5*8,1
+       byte 16*8,-2
+       byte 5*8,-1
+       byte 10*8,-2
+       byte 8*8,1
+       even
+
+*
+* Monsters: x, y, status, spare, colour, direction, timer, spare
+*
+stmst1 data 256+(16*13)
+       byte 0,snorml,0,6
+       data -1
+       byte 0,0
+       data 256+(16*10)
+       byte 40,snorml,0,13
+       data -1
+       byte 0,0
+       data 256+(16*6)
+       byte 40*3,snorml,0,7
+       data 1
+       byte 0,0
+       data 256+(16*3)
+       byte 40*4,snorml,0,2
+       data 1
+       byte 0,0
+       data 256+(16*6)
+       byte 240,snorml,0,7
+       data 1
+       byte 0,0
+       data 256+(16*3)
+       byte 240,snorml,0,2
+       data 1
+       byte 0,0
+
+stmst2 data 256+(16*13)
+       byte 0,snorml,0,6
+       data -1
+       byte 0,0
+       data 256+(16*10)
+       byte 24,snorml,0,13
+       data -1
+       byte 0,0
+       data 256+(16*6)
+       byte 24*5,snorml,0,7
+       data 1
+       byte 0,0
+       data 256+(16*3)
+       byte 24*2,snorml,0,2
+       data 1
+       byte 0,0
+       data 256+(16*2)
+       byte 24*6,snorml,0,2
+       data 1
+       byte 0,0
+       data 256+(16*8)
+       byte 24*7,snorml,0,14
+       data 1
+       byte 0,0

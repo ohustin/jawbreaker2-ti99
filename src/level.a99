@@ -1,0 +1,374 @@
+*********************************************************************
+*
+* Levels, game start and difficulty
+*
+* Port of msx/level.asm and the game setup part of msx/VSBIOS.asm.
+*
+*********************************************************************
+
+*********************************************************************
+*
+* Start a new game
+*
+gamini:
+       mov  r11,*r10+
+       li   r0,3*256
+       movb r0,@lives
+       clr  r0
+       movb r0,@cmode
+       movb r0,@level
+       clr  @score
+       li   r0,10000
+       mov  r0,@nxtlif
+       bl   @nxtlvl
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// gamini
+
+*********************************************************************
+*
+* Next level
+*
+nxtlvl:
+       mov  r11,*r10+
+       movb @level,r0
+       ai   r0,>0100
+       movb r0,@level
+       li   r0,74*256                  ; Dots to eat
+       movb r0,@dots
+       li   r1,level1
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jne  nxtlv1
+       li   r0,103*256
+       movb r0,@dots
+       li   r1,level2
+nxtlv1:
+       bl   @buildl
+       bl   @rstwal
+       bl   @savtxt                    ; Park what the ready text covers
+       li   r0,60*256
+       movb r0,@dsptim
+       li   r0,mready*256              ; "Ready?"
+       movb r0,@cmode
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// nxtlvl
+
+*********************************************************************
+*
+* Draw a whole level into the name table
+*
+* r1: table of row addresses, terminated by zero
+*
+buildl:
+       mov  r11,*r10+
+       mov  r1,r6                      ; Table of rows
+       li   r4,tnp
+buildl1:
+       mov  *r6+,r1                    ; Address of the next row
+       jeq  buildl2
+       mov  r4,r0
+       li   r2,32
+       bl   @vmbw
+       ai   r4,32
+       jmp  buildl1
+buildl2:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// buildl
+
+*********************************************************************
+*
+* Put the walls back the way they started
+*
+rstwal:
+       mov  r11,*r10+
+       li   r4,4*32                    ; Four walls, five rows apart
+       li   r5,5*32
+       li   r6,4
+       li   r7,lvlwal
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jne  rstwa1
+       li   r4,2*32                    ; Seven walls, three rows apart
+       li   r5,3*32
+       li   r6,7
+       li   r7,lvlwl2
+rstwa1:
+       li   r0,tnp
+       a    r4,r0
+       mov  r7,r1
+       li   r2,32
+       bl   @vmbw
+       a    r5,r4
+       dec  r6
+       jne  rstwa1
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// rstwal
+
+*********************************************************************
+*
+* Restart the current level, also used after the player has died
+*
+* The name table already holds the dots that are left, so only the
+* walls, the monsters and the sprites are set up again.
+*
+lvlrst:
+       mov  r11,*r10+
+       bl   @disscr
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jeq  lvlrs1
+       bl   @initg1
+       jmp  lvlrs2
+lvlrs1:
+       bl   @initg2
+lvlrs2:
+       bl   @rstwal
+       clr  @timer
+       li   r0,200
+       mov  r0,@ttbonu
+       clr  r0
+       movb r0,@bonmul
+       bl   @setmst                    ; Monster patterns for this level
+       bl   @nobonu
+       bl   @setdif
+       bl   @enascr
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// lvlrst
+
+*********************************************************************
+*
+* Jawbreaker II: 32x32 player, four walls five rows apart
+*
+initg1:
+       mov  r11,*r10+
+       bl   @larspr
+       li   r1,stopn1                  ; Wall openings
+       li   r2,openin
+       li   r3,4
+       bl   @cpyopn
+       li   r0,16*7                    ; Player start position
+       mov  r0,@jawx
+       li   r0,40*2
+       mov  r0,@jawy
+       clr  @jawsx
+       clr  @jawsy
+       li   r1,ini1tb
+       bl   @setpar
+       bl   @clrjaw
+       li   r1,stmst1                  ; Monsters
+       bl   @cpymst
+       li   r0,bonusx+(32*bonusy)
+       mov  r0,@bonoff
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+*// initg1
+
+*********************************************************************
+*
+* Jawbreaker I: 16x16 player, seven walls three rows apart
+*
+initg2:
+       mov  r11,*r10+
+       bl   @smlspr
+       li   r1,stopn2
+       li   r2,openin
+       li   r3,7
+       bl   @cpyopn
+       li   r0,16*7
+       mov  r0,@jawx
+       li   r0,24*3
+       mov  r0,@jawy
+       clr  @jawsx
+       clr  @jawsy
+       li   r1,ini2tb
+       bl   @setpar
+       bl   @clrjaw
+       li   r1,stmst2
+       bl   @cpymst
+       li   r0,bonusx+(32*bonusy)-32
+       mov  r0,@bonoff
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+*// initg2
+
+*
+* The player starts standing still and the game starts playing
+*
+clrjaw:
+       clr  r0
+       movb r0,@jawmov
+       movb r0,@jawmod
+       movb r0,@cmode
+       rt
+*// clrjaw
+
+*
+* Copy the settings above into the scratch pad
+*
+setpar:
+       li   r2,parblk
+       li   r3,parlen
+       b    @b1ram
+*// setpar
+
+*
+* Copy the start positions of the wall openings
+*
+cpyopn:
+       sla  r3,1
+       b    @b1ram
+*// cpyopn
+
+*
+* Copy the start positions of the monsters
+*
+cpymst:
+       li   r2,mstdat
+       li   r3,6*mstlen
+       b    @b1ram
+*// cpymst
+
+*********************************************************************
+*
+* Difficulty for the current level
+*
+* The energizer gets shorter, the monsters get faster and, in
+* Jawbreaker I, more numerous.
+*
+setdif:
+       mov  r11,*r10+
+       li   r0,250*256
+       movb r0,@scrdur
+       movb @level,r1
+       srl  r1,8
+       ci   r1,1
+       jeq  setdi9                     ; Level 1 stays as it is
+       ci   r1,8
+       jl   setdi1
+       li   r1,8                       ; Level 8 and up are all the same
+setdi1:
+       sla  r1,1
+       mov  @diftab(r1),r2
+       movb *r2+,@scrdur               ; Scare duration
+       movb *r2+,r3                    ; Extra monsters
+       srl  r3,8
+       jeq  setdi2
+       movb @gtype,r0
+       srl  r0,8
+       ci   r0,2
+       jne  setdi2                     ; Only in Jawbreaker I
+       sla  r3,8
+       movb r3,@nbrmst
+setdi2:
+       movb *r2,r4                     ; Monsters that get faster
+       srl  r4,8
+       jeq  setdi9
+       li   r6,mstdat
+setdi3:
+       mov  @6(r6),r0
+       a    r0,r0                      ; Twice the speed
+       mov  r0,@6(r6)
+       ai   r6,mstlen
+       dec  r4
+       jne  setdi3
+setdi9:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*
+*        scare duration, monster count, faster monsters
+*
+diftab data 0                          ; Level 0 is never used
+       data 0                          ; Level 1 is handled above
+       data dif2
+       data dif3
+       data dif4
+       data dif5
+       data dif6
+       data dif7
+       data dif8
+dif2   byte 225,0,1
+dif3   byte 220,5,1
+dif4   byte 200,5,2
+dif5   byte 200,5,3
+dif6   byte 200,5,3
+dif7   byte 200,6,3
+dif8   byte 150,6,4
+       even
+*// setdif
+
+*********************************************************************
+*
+* Level layouts
+*
+* Every entry is the address of a 32 byte row.
+*
+level1 data lvlblk,lvlspc,lvlblk,lvlblk,lvlwal
+       data lvlblk,lvldot,lvlblk,lvlblk,lvlwal
+       data lvlblk,lvlbon,lvlblk,lvlblk,lvlwal
+       data lvlblk,lvldot,lvlblk,lvlblk,lvlwal
+       data lvlblk,lvlspc,lvlblk,lvlblk
+       data 0
+
+level2 data lvldt2,lvlblk,lvlwl2
+       data lvldt2,lvlblk,lvlwl2
+       data lvldt2,lvlblk,lvlwl2
+       data lvldt2,lvlblk,lvlwl2
+       data lvldt2,lvlblk,lvlwl2
+       data lvldt2,lvlblk,lvlwl2
+       data lvldt2,lvlblk,lvlwl2
+       data lvldt2,lvlblk,lvlblk
+       data 0
+
+lvlblk byte 0,0,0,0,0,0,0,0
+       byte 0,0,0,0,0,0,0,0
+       byte 0,0,0,0,0,0,0,0
+       byte 0,0,0,0,0,0,0,0
+
+lvldot byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,0
+
+lvldt2 byte 0,0,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,0,0,0
+
+lvlbon byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,0
+       byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,0
+
+lvlspc byte 0,5,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,4,0,4
+       byte 0,4,0,4,0,5,0,0
+
+lvlwal byte 2,2,2,2,2,2,2,2
+       byte 2,2,2,2,2,2,2,2
+       byte 2,2,2,2,2,2,2,2
+       byte 2,2,2,2,2,2,2,2
+
+lvlwl2 byte 0,0,143,2,2,2,2,2
+       byte 2,2,2,2,2,2,2,2
+       byte 2,2,2,2,2,2,2,2
+       byte 2,2,2,2,2,128,0,0
+

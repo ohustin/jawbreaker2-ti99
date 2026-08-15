@@ -1,0 +1,329 @@
+*********************************************************************
+*
+* Sprite engine
+*
+* Straight port of msx/sprites.asm.  Two kinds of sprites exist:
+*
+*  - "descriptor" sprites (the player, the tooth brush, the logo).
+*    A descriptor lists one or more 16x16 sprites with an offset, a
+*    colour and the address of a 32 byte pattern.  The pattern is
+*    streamed into the sprite generator table every frame, which is
+*    how the MSX version animates the player without keeping every
+*    frame in VRAM.
+*
+*  - monster sprites.  Their patterns are pre-loaded by setmst and the
+*    pattern number is calculated from the monster position, so that
+*    the mouth animates as the monster crosses the screen.
+*
+* Descriptor layout (word aligned for the TMS9900):
+*    data  number of sprites
+*    byte  y offset, x offset, colour, 0
+*    data  pattern address (bank 1)
+*    ...
+*
+*********************************************************************
+
+*********************************************************************
+*
+* Start a new sprite list
+*
+initspr:
+       li   r0,tas
+       mov  r0,@tasptr
+       li   r0,tgs
+       mov  r0,@tgsptr
+       clr  r0
+       movb r0,@tascnt
+       rt
+*// initspr
+
+*********************************************************************
+*
+* Draw a descriptor sprite
+*
+* r6: descriptor address
+* r3: x
+* r4: y
+*
+putspr:
+       mov  r11,*r10+
+       mov  *r6+,r7                    ; Number of sprites
+putsp1:
+       mov  @tasptr,r0                 ; Sprite attribute entry
+       bl   @vwad
+       inct @tasptr
+       inct @tasptr
+*      y
+       movb *r6,r5
+       srl  r5,8
+       a    r4,r5
+       dec  r5
+       andi r5,>00ff
+       swpb r5
+       movb r5,*r15
+*      x
+       movb @1(r6),r5
+       srl  r5,8
+       a    r3,r5
+       ci   r5,255
+       jle  putsp2
+       li   r5,255                     ; Off screen to the right
+putsp2:
+       swpb r5
+       movb r5,*r15
+*      Pattern number
+       movb @tascnt,r5
+       movb r5,*r15
+       ab   @cst4,@tascnt
+*      Colour
+       movb @2(r6),r5
+       movb r5,*r15
+*      Stream the pattern into the sprite generator table
+       mov  @tgsptr,r0
+       mov  @4(r6),r1
+       bl   @b1pat
+       li   r5,32
+       a    r5,@tgsptr
+       ai   r6,6                       ; Next entry
+       dec  r7
+       jne  putsp1
+*      Terminate the sprite list, unless a second sprite follows
+*      (the death sequence draws the player in two passes)
+       mov  @tasptr,r0
+       bl   @vwad
+       movb @cmode,r5
+       srl  r5,8
+       ci   r5,mdeath
+       jeq  putsp3
+       li   r5,>d000                   ; y = 208
+       movb r5,*r15
+putsp3:
+       dect r10
+       mov  *r10,r11
+       b    *r11
+cst4   byte 4
+       even
+*// putspr
+
+*********************************************************************
+*
+* Draw a monster, two overlapping sprites
+*
+* r6: monster record
+* r3: x (low byte of the 16 bit position)
+* r4: y
+* r8: 0 for a normal monster, 32 when the monster is in the left
+*     hand exit area and has to be drawn with the early clock bit
+*
+putmst:
+       mov  r11,*r10+
+       li   r7,2                       ; Two layers
+putms1:
+       mov  @tasptr,r0
+       bl   @vwad
+       inct @tasptr
+       inct @tasptr
+*      y
+       mov  r4,r5
+       dec  r5
+       andi r5,>00ff
+       swpb r5
+       movb r5,*r15
+*      x
+       mov  r3,r5
+       a    r8,r5
+       swpb r5
+       movb r5,*r15
+*      Pattern number
+       movb @3(r6),r5                  ; Status
+       srl  r5,8
+       andi r5,15
+       ci   r5,seaten
+       jeq  putms2
+       bl   @mstnpt                    ; Normal or scared: walk animation
+       jmp  putms3
+putms2:
+       bl   @mstept                    ; Eaten: spinning or bonus value
+putms3:
+       swpb r5
+       movb r5,*r15
+       ab   @cst4,@tascnt
+*      Colour
+       movb @5(r6),r5                  ; Default colour
+       srl  r5,8
+       ci   r7,1                       ; Second layer is always white
+       jne  putms4
+       li   r5,15
+putms4:
+       movb @3(r6),r2
+       srl  r2,8
+       ci   r2,sscare
+       jne  putms5
+       bl   @mstscl                    ; Scared colour, blinks when the
+putms5:                                ; energizer is running out
+       andi r2,15
+       ci   r2,seaten
+       jne  putms6
+       li   r5,15
+       ci   r7,1
+       jeq  putms6
+       li   r5,4
+putms6:
+       mov  r8,r8                      ; Early clock bit for the left exit
+       jeq  putms7
+       ori  r5,>0080
+putms7:
+       swpb r5
+       movb r5,*r15
+       dec  r7
+       jne  putms1
+*      Terminate the sprite list
+       mov  @tasptr,r0
+       bl   @vwad
+       li   r5,>d000
+       movb r5,*r15
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// putmst
+
+*
+* Pattern number for a monster that is alive: the frame follows the x
+* position so that the monster chews while it moves
+*
+mstnpt:
+       mov  r11,r9
+       movb @tascnt,r5
+       srl  r5,8
+       andi r5,4                       ; Layer
+       mov  r5,r2
+       mov  r3,r5
+       neg  r5
+       andi r5,>00ff
+       movb @level,r1                  ; Every third level the monsters
+       srl  r1,8                       ; bounce back and forth instead of
+       andi r1,3                       ; wrapping around
+       ci   r1,2
+       jne  mstnp1
+       mov  r5,r1
+       andi r1,>0040
+       jeq  mstnp1
+       inv  r5
+       andi r5,>00ff
+mstnp1:
+       srl  r5,2
+       andi r5,15
+       sla  r5,3
+       a    r2,r5
+       andi r5,>007f
+       ai   r5,mstnrm
+       b    *r9
+*// mstnpt
+
+*
+* Pattern number for a monster that has been eaten
+*
+mstept:
+       mov  r11,r9
+       movb @8(r6),r5                  ; Scare timer
+       srl  r5,8
+       ci   r5,175
+       jhe  mstep2                     ; Just eaten: show the bonus value
+       mov  @timer,r5
+       andi r5,>00ff
+       srl  r5,2
+       sla  r5,3
+       movb @tascnt,r2
+       srl  r2,8
+       a    r2,r5
+       andi r5,>003f
+       ai   r5,mstetn
+       b    *r9
+mstep2:
+       movb @3(r6),r5                  ; Multiplier in the high nibble
+       srl  r5,8
+       srl  r5,1
+       andi r5,>0038
+       ai   r5,-8
+       movb @tascnt,r2
+       srl  r2,8
+       andi r2,4
+       a    r2,r5
+       ai   r5,mst100
+       b    *r9
+*// mstept
+
+*
+* Scared monsters are blue, and blink between blue and their own
+* colour when the energizer is about to run out
+*
+mstscl:
+       li   r5,4
+       movb @scrtim,r1
+       srl  r1,8
+       ci   r1,100
+       jhe  mstsc1
+       andi r1,4
+       jeq  mstsc1
+       movb @5(r6),r5                  ; Back to the normal colour
+       srl  r5,8
+       ci   r7,1
+       jne  mstsc1
+       li   r5,15
+mstsc1:
+       rt
+*// mstscl
+
+*********************************************************************
+*
+* Sprite descriptors
+*
+jaw1   data 2
+       byte 0,0,6,0
+       data jawtgs1_6
+       byte 0,0,15,0
+       data jawtgs1_15
+
+jaw2   data 2
+       byte 0,0,6,0
+       data jawtgs2_6
+       byte 0,0,15,0
+       data jawtgs2_15
+
+jawv1  data 2
+       byte 0,0,6,0
+       data jawtgsv1_6
+       byte 0,0,15,0
+       data jawtgsv1_15
+
+jawv2  data 2
+       byte 0,0,6,0
+       data jawtgsv2_6
+       byte 0,0,15,0
+       data jawtgsv2_15
+
+jawdt1 data 1
+       byte 0,0,6,0
+       data jawtgs1_6
+
+jawdt2 data 1
+       byte 0,0,15,0
+       data jawtgs1_15
+
+tbrush data 2
+       byte 0,0,8,0
+       data tgssp28l0
+       byte 0,32,8,0
+       data tgssp29l0
+
+tbrsh2 data 2
+       byte 0,0,8,0
+       data tgssp28l0
+       byte 0,16,8,0
+       data tgssp29l0
+
+logo   data 2
+       byte 0,0,4,0
+       data abysslogogfx1
+       byte 0,0,15,0
+       data abysslogogfx2

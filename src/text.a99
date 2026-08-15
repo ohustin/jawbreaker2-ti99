@@ -1,0 +1,93 @@
+*********************************************************************
+*
+* Text output
+*
+* The name table doubles as the playfield, so text is written the same
+* way the MSX version does it (msx/VSBIOS.asm printat / DispHL): set
+* the VDP write address and stream characters, the character codes are
+* plain ASCII because the font is loaded at character 32 upwards.
+*
+*********************************************************************
+
+*********************************************************************
+*
+* Print r3 as five decimal digits at the current write address
+*
+dsp5:
+       mov  r11,*r10+
+       li   r4,10000
+       bl   @dspdig
+       li   r4,1000
+       bl   @dspdig
+       li   r4,100
+       bl   @dspdig
+       li   r4,10
+       bl   @dspdig
+       li   r4,1
+       bl   @dspdig
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// dsp5
+
+*********************************************************************
+*
+* Print r3 as three decimal digits at the current write address
+*
+dsp3:
+       mov  r11,*r10+
+       li   r4,100
+       bl   @dspdig
+       li   r4,10
+       bl   @dspdig
+       li   r4,1
+       bl   @dspdig
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// dsp3
+
+*
+* One digit: how many times does r4 fit in r3
+*
+dspdig:
+       li   r5,>3000                   ; ASCII '0' in the MSB
+dspdi1:
+       c    r3,r4
+       jl   dspdi2
+       s    r4,r3
+       ai   r5,>0100
+       jmp  dspdi1
+dspdi2:
+       movb r5,*r15
+       rt
+*// dspdig
+
+*********************************************************************
+*
+* Clear the whole name table
+*
+clrscr:
+       mov  r11,*r10+
+       li   r0,tnp
+       clr  r1
+       li   r2,768
+       bl   @vsmw
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// clrscr
+
+*********************************************************************
+*
+* Remove all sprites from the screen
+*
+clrspr:
+       mov  r11,*r10+
+       li   r0,tas
+       li   r1,>d000                   ; y = 208 stops the sprite list
+       bl   @vsbw
+       dect r10
+       mov  *r10,r11
+       b    *r11
+*// clrspr
