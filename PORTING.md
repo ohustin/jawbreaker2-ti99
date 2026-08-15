@@ -61,13 +61,15 @@ ending at `>83d4`.
 
 ## Cartridge layout
 
-16K in two 8K banks, standard `paged378` switching (a write to `>6000` selects
-bank 0, a write to `>6002` selects bank 1):
+32K in four 8K banks, standard `paged378` switching (a write to `>6000 + 2n`
+selects bank n):
 
 ```
 bank 0  >6000-7dff   code
 bank 1  >6000-7dff   graphics, strings, start position tables
-shared  >7e00-7fff   bank switching helpers, identical in both banks
+bank 2  >6000-7dff   the intro tune
+bank 3  >6000-7dff   the in-game tune
+shared  >7e00-7fff   bank switching helpers, identical in every bank
 ```
 
 Because a bank switch changes the memory under the program counter, everything
@@ -77,14 +79,51 @@ exist in both banks: `b1copy` (bank 1 → VRAM), `b1pat` (one sprite pattern),
 
 ## Sound
 
-This is the one part that could not be carried over. The MSX version uses the
-AY-3-8910 with the ayFX effect player and PT3 music; the TI-99/4A has an
-SN76489 with three tone channels, one noise channel and no envelopes.
+The MSX version uses the AY-3-8910 with the ayFX effect player and PT3 music;
+the TI-99/4A has an SN76489: three tone channels, one noise channel, four bit
+attenuation, no envelopes.
 
-`src/sound.a99` is a small effect player written for the SN76489. An effect is
-a channel plus a list of `frequency, attenuation, frames` steps, one effect
-plays at a time, and `sfxini` is called in exactly the places where the MSX
-code calls `ayFX_INIT`. The PT3 music is not ported.
+**Effects.** `src/sound.a99` is a small effect player written for the
+SN76489. An effect is a channel plus a list of `frequency, attenuation,
+frames` steps, one plays at a time, and `sfxini` is called in exactly the
+places where the MSX code calls `ayFX_INIT`.
+
+**Music.** The PT3 replayer in `msx/Code/PT3-ROM.ASM` is ported to Python in
+`tools/pt3.py` - pattern decoding, samples, ornaments, envelopes, portamento,
+vibrato and all, with the variables keeping their Z80 names. Instead of
+running on the Z80 at 50 Hz it runs at build time and records what the AY
+registers would be on every frame; `tools/conv_music.py` maps that to the
+SN76489 and writes the difference between one frame and the next.
+
+The mapping gets one thing for free: the MSX clocks its AY at 1.7897725 MHz
+and divides by 16, the TI-99/4A clocks its SN76489 at 3.579545 MHz and divides
+by 32, so **a tone period means the same pitch on both machines** and
+transfers unchanged.
+
+What does not transfer:
+
+- **The envelope.** PT3 uses it for the buzzy bass, where the envelope runs at
+  audio rate and the tone register carries the note. The note survives, the
+  timbre does not. Envelopes slow enough to be heard as a fade are simulated
+  and become a volume.
+- **The bottom octave.** The SN76489 divider stops at 1023, about 110 Hz.
+  Lower notes are shifted up an octave: 224 of them in the intro tune, 2201
+  frames worth in the in-game tune, which is mostly that bass line.
+- **Noise.** The AY mixes noise into a tone channel; the SN76489 has a
+  separate noise channel with three fixed rates, so drums get that channel and
+  the closest rate.
+
+The stream is a byte per frame plus the register writes:
+
+    >00->7e   that many bytes follow, they go straight to the chip
+    >7f       end of the stream, carry on from the loop point
+    >80->ff   (b and >7f) frames with nothing to do
+
+which comes to 4337 bytes for the intro and 5152 for the in-game tune, a bank
+each, and about one byte a frame to play. Two details matter: the stream is
+50 Hz and the TI runs at 60, so the player skips every sixth frame, which is
+what `PlayMus` does on the MSX; and while an effect is playing the music
+leaves that channel alone, the same way ayFX takes priority on the MSX.
 
 ## Instruction level notes
 

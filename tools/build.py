@@ -45,8 +45,9 @@ def report_usage():
         return
     import re
     addr = re.compile(r"^(?:\d{4})?\s+([0-9A-F]{4}) [0-9A-F]{4}")
-    bank = re.compile(r"^\s*\d{4}\s+bank\s+(0|1|all)\b", re.I)
-    names = {"0": "bank 0 (code)", "1": "bank 1 (data)", "all": "shared"}
+    bank = re.compile(r"^\s*\d{4}\s+bank\s+(0|1|2|3|all)\b", re.I)
+    names = {"0": "bank 0 (code)", "1": "bank 1 (data)", "2": "bank 2 (intro)",
+             "3": "bank 3 (game)", "all": "shared"}
     shared = 0x7E00
     current = None
     top = {}
@@ -60,7 +61,8 @@ def report_usage():
             a = int(m.group(1), 16)
             if 0x6000 <= a < 0x8000:
                 top[current] = max(top.get(current, 0), a)
-    for name in ("bank 0 (code)", "bank 1 (data)", "shared"):
+    for name in ("bank 0 (code)", "bank 1 (data)", "bank 2 (intro)",
+                 "bank 3 (game)", "shared"):
         if name in top:
             end = top[name] + 2
             limit = 0x8000 if name == "shared" else shared
@@ -77,7 +79,7 @@ def main():
                         "-o", os.path.join("build", "jaw")])
 
     banks = []
-    for n in (0, 1):
+    for n in (0, 1, 2, 3):
         path = os.path.join(BUILD, "jaw_b%d" % n)
         if not os.path.isfile(path):
             path += ".bin"
@@ -92,7 +94,7 @@ def main():
     with open(rom, "wb") as f:
         for b in banks:
             f.write(b)
-    print("wrote %s (%d bytes)" % (os.path.relpath(rom, ROOT), 2 * BANK_SIZE))
+    print("wrote %s (%d bytes)" % (os.path.relpath(rom, ROOT), len(banks) * BANK_SIZE))
 
     shutil.copy(os.path.join(ROOT, "layout.xml"), os.path.join(BUILD, "layout.xml"))
     if shutil.which("jar"):

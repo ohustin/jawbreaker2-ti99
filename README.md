@@ -16,7 +16,7 @@ back to the TI-99/4A.
 
 ## What you need to run it
 
-A plain TI-99/4A console. The game is a 16K cartridge and keeps all of its
+A plain TI-99/4A console. The game is a 32K cartridge and keeps all of its
 variables in the 256 byte scratch pad, so **no memory expansion is required**.
 
 ![running in Classic99](docs/classic99.png)
@@ -70,13 +70,14 @@ The build finds `xas99.py` next to the repository or on the path; set the
 `XAS99` environment variable to point at it explicitly. On Windows `make.bat`
 does the same thing. Output lands in `build/`:
 
-- `jawbreaker2-8.bin` — 16K cartridge image, two 8K banks
+- `jawbreaker2-8.bin` — 32K cartridge image, four 8K banks
 - `jawbreaker2.rpk` — the same image packed for MAME and js99er
 - `jawbreaker.lst` — assembly listing
 
 `tools/conv_gfx.py` regenerates `src/gfx-*.a99` from the MSX data files and
-runs as part of the build; the generated files are checked in so that the
-build works without it.
+runs as part of the build; `tools/conv_music.py` regenerates
+`src/music-*.a99` from the PT3 modules. Both outputs are checked in, so the
+build works without rerunning them.
 
 ## Testing
 
@@ -108,18 +109,22 @@ src/          the TI-99/4A port, TMS9900 assembly for xas99
   sound.a99        SN76489 sound engine and effects
   data.a99         strings and tables that live in the data bank
   gfx-*.a99        generated graphics data
+  music-*.a99      generated music, one tune per bank
 msx/          the MSX1 original, copied unchanged
-tools/        graphics converter, build script, simulator
+tools/        graphics and music converters, build script, simulator
 docs/         screen shots
 ```
 
 ## Differences from the MSX version
 
-- **Music.** The MSX version plays PT3 modules on the AY-3-8910. The
-  TI-99/4A has an SN76489: three square waves, one noise channel, no
-  envelopes. The sound effects have been rewritten for it and sit in the same
-  places in the game, but the music is not ported. Converting the PT3 tunes to
-  an SN76489 register stream would be a project of its own.
+- **Music.** Both PT3 tunes play. The replayer from `msx/Code/PT3-ROM.ASM`
+  is ported to Python (`tools/pt3.py`), runs the modules at build time and
+  records the AY-3-8910 registers frame by frame; `tools/conv_music.py` maps
+  those to the SN76489 and packs the differences. What the SN76489 cannot
+  reproduce is the AY envelope, so the buzzy envelope bass keeps its notes but
+  loses its timbre, and notes below about 110 Hz are shifted up an octave
+  because the chip cannot go lower. Sound effects are written natively for the
+  SN76489 and take their channel back from the music while they play.
 - **Graphics are identical.** Both machines use the TMS9918A, so every
   pattern, colour and sprite byte is reused unchanged, and the port keeps the
   MSX VRAM layout as well.

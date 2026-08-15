@@ -142,6 +142,9 @@ lvlrs2:
        bl   @setmst                    ; Monster patterns for this level
        bl   @nobonu
        bl   @setdif
+       li   r1,>6006                   ; The game tune lives in bank 3
+       li   r2,musgam
+       bl   @musini
        bl   @enascr
        dect r10
        mov  *r10,r11

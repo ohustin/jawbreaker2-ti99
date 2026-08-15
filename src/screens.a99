@@ -25,6 +25,9 @@ iattra:
        bl   @b1prnt
        li   r1,attscr                  ; Start the intro script
        bl   @scrini
+       li   r1,>6004                   ; The intro tune lives in bank 2
+       li   r2,musint
+       bl   @musini
        li   r0,16
        mov  r0,@jawy
        li   r0,16*256
@@ -187,6 +190,7 @@ gmenu6:
        bl   @b1prnt
        bl   @rdfire
        jeq  gmenu7
+       bl   @musoff
        li   r1,sfxstr
        bl   @sfxini
        li   r0,>0100

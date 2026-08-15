@@ -192,7 +192,17 @@ sndlen equ  16
 stack  equ  sndvar+sndlen
 lastsp equ  stack+16                   ; Descriptor drawn last frame
 lastsc equ  lastsp+2                   ; Score that is on the screen
-padend equ  lastsc+2
+
+**
+* Music player state, see sndmus in the shared segment
+*
+musptr equ  lastsc+2                   ; Position in the music stream
+muslop equ  musptr+2                   ; Where the stream loops back to
+musbnk equ  muslop+2                   ; Bank select address of the tune
+muswai equ  musbnk+2                   ; Frames left with nothing to do
+musskp equ  muswai+1                   ; 60 Hz to 50 Hz counter
+muschn equ  musskp+1                   ; Channel the last byte was for
+padend equ  muschn+1
 
 *********************************************************************
 *
@@ -254,6 +264,7 @@ modtab data mgame0                     ; 0 Playing
 * Every mode routine jumps back here when done
 *
 frmend:
+       bl   @musply
        bl   @sndply
        jmp  loop
 
@@ -320,6 +331,16 @@ rndmul data 31421
 
 *********************************************************************
 *
+* Banks 2 and 3 - the music, one tune each
+*
+       bank 2
+       copy "music-intro.a99"
+
+       bank 3
+       copy "music-game.a99"
+
+*********************************************************************
+*
 * Shared segment, identical code in both banks
 *
        bank all, >7e00
@@ -380,6 +401,128 @@ b1prn2:
        clr  @>6000                     ; Back to bank 0
        b    *r9
 *// b1prnt
+
+**
+* Start a tune
+*
+* r1: bank select address of the tune, r2: address of the stream
+*
+musini:
+       mov  r11,r9
+       mov  r1,@musbnk
+       clr  *r1                        ; Select the music bank
+       mov  *r2+,r0                    ; First word is the loop offset
+       a    r2,r0
+       mov  r0,@muslop
+       mov  r2,@musptr
+       clr  @>6000
+       clr  r0
+       movb r0,@muswai
+       movb r0,@musskp
+       movb r0,@muschn
+       b    *r9
+*// musini
+
+**
+* Stop the music and silence the chip
+*
+musoff:
+       clr  @musptr
+       li   r1,>9f00
+       movb r1,@sound
+       li   r1,>bf00
+       movb r1,@sound
+       li   r1,>df00
+       movb r1,@sound
+       li   r1,>ff00
+       movb r1,@sound
+       rt
+*// musoff
+
+**
+* Play one frame of the tune
+*
+* The stream lives in its own bank, so the whole player sits in the
+* shared segment.  Format, written by tools/conv_music.py:
+*
+*   >00->7e   that many bytes follow, they go straight to the chip
+*   >7f       end of the stream, carry on from the loop point
+*   >80->ff   (b and >7f) frames with nothing to do
+*
+musply:
+       mov  @musptr,r2
+       jne  musp0
+       rt
+musp0:
+*      The tune was written at 50 Hz and the TI runs at 60, so every
+*      sixth frame is skipped, the same trick PlayMus uses on the MSX
+       movb @musskp,r0
+       srl  r0,8
+       inc  r0
+       ci   r0,6
+       jne  musp1
+       clr  r0
+       sla  r0,8
+       movb r0,@musskp
+       rt
+musp1:
+       sla  r0,8
+       movb r0,@musskp
+       movb @muswai,r0                 ; In a run of quiet frames?
+       jeq  musp2
+       ai   r0,->0100
+       movb r0,@muswai
+       rt
+musp2:
+       mov  r11,r9
+       mov  @musbnk,r1
+       clr  *r1                        ; Select the music bank
+musp3:
+       movb *r2+,r0
+       srl  r0,8
+       ci   r0,>007f
+       jne  musp4
+       mov  @muslop,r2                 ; End of the stream
+       jmp  musp3
+musp4:
+       ci   r0,>0080
+       jl   musp6
+       andi r0,>007f                   ; A run of quiet frames
+       dec  r0
+       sla  r0,8
+       movb r0,@muswai
+       jmp  musp9
+musp6:
+       mov  r0,r3
+       jeq  musp9
+musp7:
+       movb *r2+,r1                    ; One byte for the sound chip
+       mov  r1,r0
+       srl  r0,8
+       andi r0,>0080
+       jeq  musp8                      ; A data byte keeps the channel
+       mov  r1,r0
+       srl  r0,13
+       andi r0,3
+       sla  r0,8
+       movb r0,@muschn
+musp8:
+       mov  @sndptr,r0                 ; Is an effect using this channel?
+       jeq  musp10
+       movb @muschn,r0
+       srl  r0,8
+       c    r0,@sndchn
+       jeq  musp11                     ; Yes, leave the byte out
+musp10:
+       movb r1,@sound
+musp11:
+       dec  r3
+       jne  musp7
+musp9:
+       mov  r2,@musptr
+       clr  @>6000                     ; Back to bank 0
+       b    *r9
+*// musply
 
 **
 * Copy a bank 1 table into the scratch pad

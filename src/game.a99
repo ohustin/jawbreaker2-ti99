@@ -421,6 +421,7 @@ eatbn2:
 *
 levcmp:
        mov  r11,*r10+
+       bl   @musoff
        li   r0,mend*256
        movb r0,@cmode
        li   r0,150*256
@@ -744,6 +745,7 @@ colli9:
 * The player has been caught
 *
 killjw:
+       bl   @musoff
        li   r0,100*256
        movb r0,@dthdly
        li   r0,mdeath*256
