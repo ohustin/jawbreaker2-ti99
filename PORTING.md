@@ -73,9 +73,10 @@ shared  >7e00-7fff   bank switching helpers, identical in every bank
 ```
 
 Because a bank switch changes the memory under the program counter, everything
-that touches bank 1 lives in the shared segment, where the same instructions
-exist in both banks: `b1copy` (bank 1 → VRAM), `b1pat` (one sprite pattern),
-`b1prnt` (print a string) and `b1ram` (copy a table into the scratch pad).
+that touches another bank lives in the shared segment, where the same
+instructions exist in every bank: `b1copy` (bank 1 → VRAM), `b1pat` (one
+sprite pattern), `b1prnt` (print a string), `b1ram` (copy a table into the
+scratch pad) and the music player `musply`.
 
 ## Sound
 
