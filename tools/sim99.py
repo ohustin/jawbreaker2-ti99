@@ -399,18 +399,23 @@ class Machine(object):
             if cnt == 0:
                 cnt = self.reg(0) & 15 or 16
             v = self.reg(r)
+            # All four shifts set carry from the last bit shifted out.
             if sub == 0x0A:
                 res = (v << cnt) & 0xFFFF
-                self.st = self.st | CAR if (v << cnt) & 0x10000 else self.st & ~CAR
+                carry = bool((v << cnt) & 0x10000)
             elif sub == 0x09:
                 res = v >> cnt
+                carry = bool(v & (1 << (cnt - 1)))
             elif sub == 0x08:
                 sv = v - 0x10000 if v & 0x8000 else v
                 res = (sv >> cnt) & 0xFFFF
+                carry = bool(v & (1 << (cnt - 1)))
             else:
                 cnt %= 16
                 res = ((v >> cnt) | (v << (16 - cnt))) & 0xFFFF
+                carry = bool(v & (1 << (cnt - 1))) if cnt else False
             self.setreg(r, self.flags(res))
+            self.st = self.st | CAR if carry else self.st & ~CAR
             return
         raise Fault("opcode %04x at %04x" % (op, pc0))
 
