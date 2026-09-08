@@ -84,10 +84,23 @@ The MSX version uses the AY-3-8910 with the ayFX effect player and PT3 music;
 the TI-99/4A has an SN76489: three tone channels, one noise channel, four bit
 attenuation, no envelopes.
 
-**Effects.** `src/sound.a99` is a small effect player written for the
-SN76489. An effect is a channel plus a list of `frequency, attenuation,
-frames` steps, one plays at a time, and `sfxini` is called in exactly the
-places where the MSX code calls `ayFX_INIT`.
+**Effects.** `msx/fullsfx.afb` is the ayFX bank the MSX version plays.
+`tools/conv_sfx.py` reads it with the format `msx/Code/ayFX-ROM.ASM` defines -
+a control byte per frame carrying a volume, with a tone or noise period when
+the bits say so - and writes `src/sfx.a99`, so the ten effects keep their real
+envelopes. Tone periods carry over unchanged, as they do for the music,
+volumes become attenuations, and frame counts are stretched by 6/5 for the
+60 Hz frame. `src/sound.a99` plays one effect at a time as a channel plus a
+list of `frequency, attenuation, frames` steps, and `sfxini` is called in
+exactly the places where the MSX calls `ayFX_INIT`.
+
+One thing does not carry over. ayFX plays every sample on one fixed channel,
+while these effects pick a tone channel or the noise channel depending on what
+the sample uses, so an effect that lands on a different channel than the one
+playing has to silence that one first - otherwise the old channel keeps
+sounding its last note forever. That is what made the tooth brush sequence
+drone: the level-finished effect is a tone, the brush is noise, and nothing
+turned the tone off.
 
 **Music.** The PT3 replayer in `msx/Code/PT3-ROM.ASM` is ported to Python in
 `tools/pt3.py` - pattern decoding, samples, ornaments, envelopes, portamento,

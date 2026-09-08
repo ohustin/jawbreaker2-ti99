@@ -72,9 +72,10 @@ sfxmst equ  2                          ; Eat monster
 sfxdie equ  3                          ; Death
 sfxfin equ  4                          ; Level finished
 sfxstr equ  5                          ; Level start
-sfxmov equ  6                          ; Menu move
-sfxbru equ  7                          ; Tooth brush
-sfxbon equ  8                          ; Eat bonus / extra life
+sfxtim equ  6                          ; Timer, in the bank but unused
+sfxmov equ  7                          ; Menu move
+sfxbru equ  8                          ; Tooth brush
+sfxbon equ  9                          ; Eat bonus / extra life
 
 **
 * Game modes (current_mode)
@@ -334,6 +335,7 @@ rndmul data 31421
 * Banks 2 and 3 - the music, one tune each
 *
        bank 2
+       copy "sfx.a99"
        copy "music-intro.a99"
 
        bank 3
@@ -401,6 +403,34 @@ b1prn2:
        clr  @>6000                     ; Back to bank 0
        b    *r9
 *// b1prnt
+
+**
+* Read a word from the effect bank
+*
+* r1: address in bank 2, returns the word in r2, r1 advanced
+*
+sfxrdw:
+       mov  r11,r9
+       clr  @>6004
+       mov  *r1+,r2
+       clr  @>6000
+       b    *r9
+*// sfxrdw
+
+**
+* Read one effect step from the effect bank
+*
+* r1: address in bank 2, returns r2 = frequency and r0 = level and
+* frames, with r1 advanced past the step
+*
+sfxrd:
+       mov  r11,r9
+       clr  @>6004
+       mov  *r1+,r2
+       mov  *r1+,r0
+       clr  @>6000
+       b    *r9
+*// sfxrd
 
 **
 * Start a tune

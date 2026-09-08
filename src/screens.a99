@@ -469,7 +469,7 @@ endseq:
        bl   @initspr
        mov  @tbrshx,r0
        c    r0,@jawx
-       jl   endse1
+       jle  endse1                     ; Stop once it has reached the jaw
        ai   r0,-2                      ; Move towards the player
        mov  r0,@tbrshx
 endse1:
@@ -503,7 +503,10 @@ endse3:
 endse4:
        b    @frmend
 *
-* Scrubbing: shake the brush and count down
+* Scrubbing: shake the brush, make the noise and count down.
+*
+* r3 and r4 carry the brush position and the sound engine uses them as
+* scratch, so they have to be saved across sfxini.
 *
 scrub:
        movb @dthdly,r0
@@ -514,15 +517,18 @@ scrub:
        mov  @timer,r0
        andi r0,8
        jeq  scrub1
-       inc  r3                         ; Shake
-       inc  r3
-       inc  r3
-       inc  r3
+       ai   r3,4                       ; Shake, eight frames each way
        rt
 scrub1:
        mov  r11,*r10+
+       mov  r3,*r10+
+       mov  r4,*r10+
        li   r1,sfxbru
        bl   @sfxini
+       dect r10
+       mov  *r10,r4
+       dect r10
+       mov  *r10,r3
        dect r10
        mov  *r10,r11
        b    *r11

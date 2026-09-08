@@ -76,7 +76,8 @@ does the same thing. Output lands in `build/`:
 
 `tools/conv_gfx.py` regenerates `src/gfx-*.a99` from the MSX data files and
 runs as part of the build; `tools/conv_music.py` regenerates
-`src/music-*.a99` from the PT3 modules. Both outputs are checked in, so the
+`src/music-*.a99` from the PT3 modules and `tools/conv_sfx.py` regenerates
+`src/sfx.a99` from the ayFX bank. All three outputs are checked in, so the
 build works without rerunning them.
 
 ## Testing
@@ -110,6 +111,7 @@ src/          the TI-99/4A port, TMS9900 assembly for xas99
   data.a99         strings and tables that live in the data bank
   gfx-*.a99        generated graphics data
   music-*.a99      generated music, one tune per bank
+  sfx.a99          generated sound effects
 msx/          the MSX1 original, copied unchanged
 tools/        graphics and music converters, build script, simulator
 docs/         screen shots
@@ -123,8 +125,9 @@ docs/         screen shots
   those to the SN76489 and packs the differences. What the SN76489 cannot
   reproduce is the AY envelope, so the buzzy envelope bass keeps its notes but
   loses its timbre, and notes below about 110 Hz are shifted up an octave
-  because the chip cannot go lower. Sound effects are written natively for the
-  SN76489 and take their channel back from the music while they play.
+  because the chip cannot go lower. The ten sound effects are converted from
+  the MSX ayFX bank the same way, envelope by envelope, and take their channel
+  back from the music while they play.
 - **Graphics are identical.** Both machines use the TMS9918A, so every
   pattern, colour and sprite byte is reused unchanged, and the port keeps the
   MSX VRAM layout as well.

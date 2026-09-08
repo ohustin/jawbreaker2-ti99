@@ -2,13 +2,17 @@
 *
 * Sound
 *
-* The MSX version uses the AY-3-8910 with the ayFX effect player and
-* PT3 music.  Neither can be reused on the TI-99/4A, which has an
-* SN76489: three square wave channels and one noise channel, no
-* envelopes and no volume ramp per channel other than the four bit
-* attenuation.  The effects below are therefore written from scratch
-* for the SN76489, one effect at a time, in the same places in the
-* game as the ayFX effects of the original.
+* The MSX version plays the ayFX bank in msx/fullsfx.afb on the
+* AY-3-8910.  tools/conv_sfx.py reads that bank and writes src/sfx.a99,
+* so these are the same ten effects with the same envelopes, mapped to
+* the SN76489: tone periods carry over unchanged, volumes become
+* attenuations, and frame counts are stretched by 6/5 because the MSX
+* plays them at 50 Hz and the TI runs at 60.
+*
+* The effect data is too big for bank 0 and lives in bank 2, so every
+* read goes through sfxrd in the shared segment.
+*
+* Callers beware: this code uses r0 to r4 as scratch.
 *
 * An effect is a channel followed by a list of steps:
 *
@@ -48,13 +52,29 @@ sndini:
 * r1: effect number
 *
 sfxini:
+       mov  r11,*r10+
        sla  r1,1
        mov  @sfxtab(r1),r1
-       mov  *r1+,r2
+       bl   @sfxrdw                    ; Channel, from the effect bank
+*      ayFX plays everything on one channel, these effects pick a tone
+*      or the noise channel, so an effect that lands on a different
+*      channel has to silence the one that was playing, or it drones on
+       mov  @sndptr,r0
+       jeq  sfxin1
+       c    r2,@sndchn
+       jeq  sfxin1
+       mov  @sndchn,r0
+       sla  r0,5
+       ori  r0,>009f                   ; Attenuation 15
+       swpb r0
+       movb r0,@sound
+sfxin1:
        mov  r2,@sndchn
        mov  r1,@sndptr
        clr  r0
        movb r0,@snddur
+       dect r10
+       mov  *r10,r11
        b    @sndstp                    ; Play the first step right away
 *// sfxini
 
@@ -77,8 +97,10 @@ sndpl9:
 * Play the next step of the running effect
 *
 sndstp:
+       mov  r11,*r10+
        mov  @sndptr,r1
-       mov  *r1+,r2                    ; Frequency
+       bl   @sfxrd                     ; r2 = frequency, r0 = level and frames
+       mov  r2,r2
        jne  sndst1
 *      End of the effect: silence the channel
        clr  @sndptr
@@ -87,17 +109,19 @@ sndstp:
        ori  r3,>009f                   ; Attenuation 15
        swpb r3
        movb r3,@sound
-       rt
+       jmp  sndst4
 sndst1:
+       mov  r1,@sndptr
+       mov  r0,r4                      ; Keep the level and frames
        mov  @sndchn,r3
        ci   r3,3
        jeq  sndst2
 *      Tone: two bytes, low four bits first
        mov  r2,r0
        andi r0,>000f
-       mov  r3,r4
-       sla  r4,5
-       a    r4,r0
+       mov  r3,r1
+       sla  r1,5
+       a    r1,r0
        ori  r0,>0080
        swpb r0
        movb r0,@sound
@@ -116,19 +140,20 @@ sndst2:
        movb r0,@sound
 sndst3:
 *      Attenuation and duration
-       movb *r1,r0
+       mov  r4,r0
        srl  r0,8
        andi r0,>000f
-       mov  r3,r4
-       sla  r4,5
-       a    r4,r0
+       mov  r3,r1
+       sla  r1,5
+       a    r1,r0
        ori  r0,>0090
        swpb r0
        movb r0,@sound
-       movb @1(r1),r0
-       movb r0,@snddur
-       inct r1
-       mov  r1,@sndptr
+       swpb r4
+       movb r4,@snddur
+sndst4:
+       dect r10
+       mov  *r10,r11
        rt
 *// sndply
 
@@ -137,130 +162,4 @@ sndst3:
 * The effects
 *
 sfxtab data sfx0,sfx1,sfx2,sfx3,sfx4
-       data sfx5,sfx6,sfx7,sfx8
-
-*
-* Eat a dot: a short high blip
-*
-sfx0   data 2
-       data 180
-       byte 4,1
-       data 140
-       byte 6,1
-       data 0
-
-*
-* Eat an energizer: a fast sweep down
-*
-sfx1   data 2
-       data 120
-       byte 2,2
-       data 180
-       byte 3,2
-       data 250
-       byte 4,2
-       data 340
-       byte 6,2
-       data 0
-
-*
-* Eat a monster: a rising arpeggio
-*
-sfx2   data 2
-       data 480
-       byte 2,2
-       data 380
-       byte 2,2
-       data 300
-       byte 2,2
-       data 240
-       byte 2,3
-       data 190
-       byte 4,3
-       data 0
-
-*
-* Death: a long fall
-*
-sfx3   data 2
-       data 160
-       byte 0,4
-       data 200
-       byte 1,4
-       data 260
-       byte 2,4
-       data 330
-       byte 3,5
-       data 420
-       byte 4,5
-       data 540
-       byte 5,6
-       data 700
-       byte 7,8
-       data 900
-       byte 10,10
-       data 0
-
-*
-* Level finished
-*
-sfx4   data 2
-       data 480
-       byte 2,4
-       data 380
-       byte 2,4
-       data 320
-       byte 2,4
-       data 240
-       byte 2,8
-       data 190
-       byte 3,8
-       data 160
-       byte 4,12
-       data 0
-
-*
-* Level start
-*
-sfx5   data 2
-       data 320
-       byte 2,6
-       data 240
-       byte 2,6
-       data 190
-       byte 2,6
-       data 160
-       byte 3,12
-       data 0
-
-*
-* Menu cursor
-*
-sfx6   data 2
-       data 300
-       byte 4,2
-       data 0
-
-*
-* Tooth brush: a short scrub of noise
-*
-sfx7   data 3
-       data 6                          ; White noise, medium
-       byte 6,2
-       data 6
-       byte 10,2
-       data 0
-
-*
-* Bonus and extra life
-*
-sfx8   data 2
-       data 340
-       byte 3,2
-       data 250
-       byte 3,2
-       data 190
-       byte 3,2
-       data 160
-       byte 3,4
-       data 0
+       data sfx5,sfx6,sfx7,sfx8,sfx9
