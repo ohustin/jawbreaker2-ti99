@@ -113,7 +113,7 @@ src/          the TI-99/4A port, TMS9900 assembly for xas99
   music-*.a99      generated music, one tune per bank
   sfx.a99          generated sound effects
 msx/          the MSX1 original, copied unchanged
-tools/        graphics and music converters, build script, simulator
+tools/        graphics, music and effect converters, build script, simulator
 docs/         screen shots
 ```
 
