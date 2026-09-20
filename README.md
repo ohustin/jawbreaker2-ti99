@@ -90,6 +90,9 @@ keys down at chosen frames and renders the video memory to a PNG:
 python tools/sim99.py 260 --key=FIRE@20 --key=FIRE@60 --png=build/screen.png
 ```
 
+`--bank=n` starts it with bank *n* selected, the way a real cartridge board can
+come up, which is what the header in every bank is for.
+
 It has no timing model and no GROM, so it says nothing about speed on real
 hardware, but it is enough to walk the whole game: attraction screen, menu,
 both game types, eating dots and energizers, monsters, dying, finishing a
@@ -99,7 +102,8 @@ level and game over have all been driven through it.
 
 ```
 src/          the TI-99/4A port, TMS9900 assembly for xas99
-  jawbreaker.a99   memory map, cartridge header, main loop, bank helpers
+  jawbreaker.a99   memory map, main loop, bank helpers
+  header.a99       cartridge header, assembled into every bank
   vdp.a99          VDP access, graphics loading
   sprite.a99       sprite engine and sprite descriptors
   game.a99         gameplay: player, dots, monsters, walls, bonus

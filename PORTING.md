@@ -72,6 +72,20 @@ bank 3  >6000-7dff   the in-game tune
 shared  >7e00-7fff   bank switching helpers, identical in every bank
 ```
 
+Every bank begins with the cartridge header, and `>7e00` upward is the same in
+all four.
+
+
+The cartridge header (`src/header.a99`) sits at the start of **every** bank,
+not only bank 0. The bank latch on a real cartridge board - a 74LS378, or a
+'379 or '377 - has no defined state when the power comes on, so the console may
+well be looking at bank 2 when it scans `>6000` for the `>aa` that tells it a
+cartridge is there. With the header in one bank only, the game simply does not
+appear on the selection screen when the latch comes up anywhere else. All four
+headers point at `cstart` in the shared segment, which selects bank 0 and
+branches to `start`; because the shared segment is identical in every bank,
+that switch is safe wherever it runs from.
+
 Because a bank switch changes the memory under the program counter, everything
 that touches another bank lives in the shared segment, where the same
 instructions exist in every bank: `b1copy` (bank 1 → VRAM), `b1pat` (one

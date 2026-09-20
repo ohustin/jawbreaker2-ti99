@@ -509,10 +509,13 @@ KEYMAP = {
 def main():
     frames = 200
     png = None
+    bank = 0
     presses = {}
     for arg in sys.argv[1:]:
         if arg.startswith("--png="):
             png = arg[6:]
+        elif arg.startswith("--bank="):
+            bank = int(arg[7:])            # Which bank the latch came up in
         elif arg.startswith("--key="):
             name, at = arg[6:].split("@")
             for k in name.upper().split("+"):
@@ -522,9 +525,12 @@ def main():
 
     rom = open(ROM, "rb").read()
     m = Machine(rom)
-    plist = (rom[0x06] << 8) | rom[0x07]
-    m.pc = (rom[plist - 0x6000 + 2] << 8) | rom[plist - 0x6000 + 3]
-    print("entry point %04x, %d banks" % (m.pc, m.nbanks))
+    m.bank = bank                          # Hardware does not define this
+    base = bank * 0x2000
+    plist = (rom[base + 0x06] << 8) | rom[base + 0x07]
+    m.pc = (rom[base + plist - 0x6000 + 2] << 8) | rom[base + plist - 0x6000 + 3]
+    print("bank %d at power on, entry point %04x, %d banks"
+          % (bank, m.pc, m.nbanks))
 
     steps = 0
     last_frame = 0

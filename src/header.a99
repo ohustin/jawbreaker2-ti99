@@ -1,0 +1,21 @@
+*********************************************************************
+*
+* Cartridge header
+*
+* Real hardware does not guarantee which bank the 74LS378 latch comes
+* up in, so the header sits at the start of every bank and the console
+* finds the game whichever bank is selected at power on.  The entry
+* point is cstart in the shared segment, which is present in every
+* bank as well and selects bank 0 before it branches into the code.
+*
+       byte >aa,>01,>00,>00
+       data >0000                      ; Power up list
+       data $+8                        ; Program list, just below
+       data >0000                      ; DSR list
+       data >0000                      ; Subprogram list
+       data >0000
+       data >0000                      ; No next program
+       data cstart                     ; Entry point
+       byte 13
+       text 'JAWBREAKER II'
+       even

@@ -12,10 +12,15 @@
 * part that cannot be reused: the AY-3-8910 code is replaced by an
 * SN76489 engine.
 *
-* 16K cartridge, two 8K banks (paged378):
+* 32K cartridge, four 8K banks (paged378):
 *   bank 0  >6000-7dff  code
 *   bank 1  >6000-7dff  graphics data
-*   shared  >7e00-7fff  bank switching helpers (identical in both banks)
+*   bank 2  >6000-7dff  sound effects and the intro tune
+*   bank 3  >6000-7dff  the in-game tune
+*   shared  >7e00-7fff  bank switching helpers (identical in every bank)
+*
+* Every bank starts with the cartridge header, because the bank latch
+* has no defined state at power on.
 *
 * All variables live in the 256 byte scratch pad, so no memory
 * expansion is required.
@@ -211,20 +216,7 @@ padend equ  muschn+1
 *
        bank 0, >6000
 
-**
-* Cartridge header
-*
-       byte >aa,>01,>00,>00
-       data >0000                      ; Power up list
-       data proglt                     ; Program list
-       data >0000                      ; DSR list
-       data >0000                      ; Subprogram list
-       data >0000
-proglt data >0000                      ; No next program
-       data start
-       byte 13
-       text 'JAWBREAKER II'
-       even
+       copy "header.a99"
 
 *********************************************************************
 *
@@ -325,6 +317,7 @@ rndmul data 31421
 * Bank 1 - graphics data
 *
        bank 1
+       copy "header.a99"
 
        copy "data.a99"
        copy "gfx-tiles.a99"
@@ -335,10 +328,12 @@ rndmul data 31421
 * Banks 2 and 3 - the music, one tune each
 *
        bank 2
+       copy "header.a99"
        copy "sfx.a99"
        copy "music-intro.a99"
 
        bank 3
+       copy "header.a99"
        copy "music-game.a99"
 
 *********************************************************************
@@ -346,6 +341,18 @@ rndmul data 31421
 * Shared segment, identical code in both banks
 *
        bank all, >7e00
+
+**
+* Entry point from the console menu
+*
+* The header of whichever bank was selected at power on points here,
+* and this code exists in every bank, so it can switch to bank 0 and
+* branch into the game from any of them.
+*
+cstart:
+       clr  @>6000                     ; Select bank 0
+       b    @start
+*// cstart
 
 **
 * Copy from bank 1 to VRAM
