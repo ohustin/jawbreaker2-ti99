@@ -2,8 +2,8 @@
 *
 * Gameplay
 *
-* Port of msx/Code/game_main.asm, msx/JB2_Openings.asm and
-* msx/JB2_Bonus.asm.
+* Port of game_main.asm, JB2_Openings.asm and JB2_Bonus.asm of the
+* MSX version.
 *
 * The MSX version keeps a copy of the whole name table in RAM and
 * works on that copy.  The TI-99/4A has only the 256 byte scratch pad

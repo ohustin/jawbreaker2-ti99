@@ -2,7 +2,8 @@
 *
 * Levels, game start and difficulty
 *
-* Port of msx/level.asm and the game setup part of msx/VSBIOS.asm.
+* Port of level.asm and the game setup part of VSBIOS.asm of the MSX
+* version.
 *
 *********************************************************************
 

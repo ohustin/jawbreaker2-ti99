@@ -6,7 +6,7 @@
 * the only difference is how the CPU talks to it: the MSX uses I/O
 * ports >98/>99, the TI-99/4A uses the memory mapped addresses >8c00
 * and >8c02.  Everything below is the TI equivalent of the vpoke /
-* outAtoVram / slowotir helpers in msx/VSBIOS.asm.
+* outAtoVram / slowotir helpers in VSBIOS.asm.
 *
 *********************************************************************
 
@@ -174,7 +174,7 @@ setr1:
 *
 * Graphics II splits the screen into three blocks of 256 characters,
 * each with its own pattern and colour data, so everything is loaded
-* three times, exactly like set_tgp / set_tc in msx/level.asm.
+* three times, exactly like set_tgp / set_tc in the MSX level.asm.
 *
 lodgfx:
        mov  r11,r8

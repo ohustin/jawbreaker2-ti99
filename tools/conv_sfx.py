@@ -4,7 +4,8 @@
 msx/fullsfx.afb is the bank the MSX version plays through ayFX; each
 sample is a list of frames carrying a volume, and either a tone period or
 a noise period.  This reads it with the format the replayer in
-msx/Code/ayFX-ROM.ASM defines and writes src/sfx.a99 in the step format
+the MSX version's ayFX replayer (ayFX-ROM.ASM) defines and writes
+src/sfx.a99 in the step format
 that src/sound.a99 plays:
 
     sfxN   data channel            2 = tone, 3 = noise

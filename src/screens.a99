@@ -2,8 +2,8 @@
 *
 * Attraction screen, menu, ready screen, death and level end
 *
-* Port of the screen handling in msx/Jawbreak2.ASM and of the little
-* script interpreter in msx/Code/animate.asm.
+* Port of the screen handling in Jawbreak2.ASM and of the little
+* script interpreter in animate.asm, both of the MSX version.
 *
 *********************************************************************
 

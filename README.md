@@ -1,7 +1,7 @@
 # Jawbreaker I + II Deluxe — TI-99/4A
 
 A port of the MSX1 game **Jawbreaker I + II Deluxe Edition** to the TI-99/4A,
-together with the MSX sources it was ported from.
+together with the MSX data it is built from.
 
 The line of descent is a small circle: *Jawbreaker* is a Sierra On-Line game
 from 1981–83, the TI-99/4A version of it was conceived by Dan Drew, Maggoo
@@ -124,15 +124,15 @@ src/          the TI-99/4A port, TMS9900 assembly for xas99
   gfx-*.a99        generated graphics data
   music-*.a99      generated music, one tune per bank
   sfx.a99          generated sound effects
-msx/          the MSX1 original: sources, data, music and the 2014 ROM
+msx/          the MSX data the build converts: graphics, tunes, effects
 tools/        graphics, music and effect converters, build script, simulator
 docs/         screen shots
 ```
 
 ## Differences from the MSX version
 
-- **Music.** Both PT3 tunes play. The replayer from `msx/Code/PT3-ROM.ASM`
-  is ported to Python (`tools/pt3.py`), runs the modules at build time and
+- **Music.** Both PT3 tunes play. The Z80 PT3 replayer the MSX version
+  uses (`PT3-ROM.ASM`) is ported to Python (`tools/pt3.py`), runs the modules at build time and
   records the AY-3-8910 registers frame by frame; `tools/conv_music.py` maps
   those to the SN76489 and packs the differences. The bass lines go below
   what an SN76489 tone channel can play, so they run on the noise channel in
@@ -144,13 +144,14 @@ docs/         screen shots
 - **Graphics are identical.** Both machines use the TMS9918A, so every
   pattern, colour and sprite byte is reused unchanged, and the port keeps the
   MSX VRAM layout as well.
-- The MSX sources in `msx/` are the ones the port was made from; as they
-  stand they do not assemble, because the file that declares the RAM
-  variables (`jawx`, `leveldata`, `mstdata`, …) is missing — the listing of
-  the 2020 build records 403 "Label not found" errors. The variable semantics
-  were recovered from the code itself for the port; see `PORTING.md`. Tracker
-  tunes by other musicians that the game never loads, and a scan of the 1983
-  Sierra On-Line box, were left out of `msx/`.
+- `msx/` holds only what the build converts: the sprite and tile data, the
+  font, the two PT3 tunes and the ayFX effect bank. The MSX source code the
+  port was translated from is not included; file names in the comments
+  (`game_main.asm`, `VSBIOS.asm`, …) refer to it. That source did not
+  assemble as it stood — the file declaring its RAM variables (`jawx`,
+  `leveldata`, `mstdata`, …) was missing, 403 "Label not found" errors in the
+  2020 build — so the variable semantics were recovered from the code itself;
+  see `PORTING.md`.
 
 ## Credits
 

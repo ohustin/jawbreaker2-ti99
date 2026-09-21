@@ -3,7 +3,7 @@
 * Text output
 *
 * The name table doubles as the playfield, so text is written the same
-* way the MSX version does it (msx/VSBIOS.asm printat / DispHL): set
+* way the MSX version does it (VSBIOS.asm printat / DispHL): set
 * the VDP write address and stream characters, the character codes are
 * plain ASCII because the font is loaded at character 32 upwards.
 *

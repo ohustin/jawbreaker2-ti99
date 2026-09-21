@@ -3,7 +3,7 @@
 * Keyboard and joystick
 *
 * The MSX version reads the cursor keys first and falls back to
-* joystick port 1 (msx/VSBIOS.asm, Read_Joystick_Keyboard).  This is
+* joystick port 1 (VSBIOS.asm, Read_Joystick_Keyboard).  This is
 * the TI-99/4A equivalent, reading the 9901 CRU directly.  The
 * direction codes are the same as the MSX ones so that the game logic
 * did not have to change:

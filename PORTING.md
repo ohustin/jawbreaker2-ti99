@@ -1,7 +1,10 @@
 # Porting notes: MSX1 → TI-99/4A
 
-How the MSX sources in `msx/` map onto the TMS9900 sources in `src/`, and the
-handful of places where the two machines forced a different solution.
+How the MSX version's Z80 sources map onto the TMS9900 sources in `src/`, and
+the handful of places where the two machines forced a different solution.
+The MSX source code itself is not part of this repository - `msx/` holds only
+the data the build converts - so file names such as `game_main.asm` or
+`VSBIOS.asm` refer to it.
 
 ## The easy half: the video chip is the same
 
@@ -99,7 +102,7 @@ the TI-99/4A has an SN76489: three tone channels, one noise channel, four bit
 attenuation, no envelopes.
 
 **Effects.** `msx/fullsfx.afb` is the ayFX bank the MSX version plays.
-`tools/conv_sfx.py` reads it with the format `msx/Code/ayFX-ROM.ASM` defines -
+`tools/conv_sfx.py` reads it with the format the ayFX replayer (`ayFX-ROM.ASM`) defines -
 a control byte per frame carrying a volume, with a tone or noise period when
 the bits say so - and writes `src/sfx.a99`, so the ten effects keep their real
 volume contours. Tone periods carry over unchanged, as they do for the music,
@@ -116,7 +119,7 @@ sounding its last note forever. That is what made the tooth brush sequence
 drone: the level-finished effect is a tone, the brush is noise, and nothing
 turned the tone off.
 
-**Music.** The PT3 replayer in `msx/Code/PT3-ROM.ASM` is ported to Python in
+**Music.** The Z80 PT3 replayer the MSX version uses (`PT3-ROM.ASM`) is ported to Python in
 `tools/pt3.py` - pattern decoding, samples, ornaments, envelopes, portamento,
 vibrato and all, with the variables keeping their Z80 names. Instead of
 running on the Z80 at 50 Hz it runs at build time and records what the AY

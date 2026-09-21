@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A PT3 replayer, ported from msx/Code/PT3-ROM.ASM.
+"""A PT3 replayer, ported from PT3-ROM.ASM, the Z80 replayer of the MSX version.
 
 This is the same algorithm the MSX version runs at 50 Hz, only written in
 Python and run at build time: it plays the module and records what the
