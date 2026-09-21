@@ -4,10 +4,14 @@
 *
 * The MSX version plays the ayFX bank in msx/fullsfx.afb on the
 * AY-3-8910.  tools/conv_sfx.py reads that bank and writes src/sfx.a99,
-* so these are the same ten effects with the same envelopes, mapped to
-* the SN76489: tone periods carry over unchanged, volumes become
-* attenuations, and frame counts are stretched by 6/5 because the MSX
-* plays them at 50 Hz and the TI runs at 60.
+* so these are the same ten effects with the same volume contours,
+* mapped to the SN76489: tone periods carry over unchanged, volumes
+* become attenuations, and frame counts are stretched by 6/5 because
+* the MSX plays them at 50 Hz and the TI runs at 60.
+*
+* While a tune plays, tone effects go on the channel it needs least
+* (sfxini), and when an effect ends its channel goes back to the tune
+* the way the tune last left it (sndrst).
 *
 * The effect data is too big for bank 0 and lives in bank 2, so every
 * read goes through sfxrd in the shared segment.
@@ -56,20 +60,43 @@ sfxini:
        sla  r1,1
        mov  @sfxtab(r1),r1
        bl   @sfxrdw                    ; Channel, from the effect bank
+*      While a tune plays, a tone effect goes on the channel that tune
+*      needs least, which tools/conv_music.py wrote into it
+       mov  @musptr,r0
+       jeq  sfxin2
+       ci   r2,3
+       jeq  sfxin2
+       movb @musfxc,r2
+       srl  r2,8
+sfxin2:
 *      ayFX plays everything on one channel, these effects pick a tone
 *      or the noise channel, so an effect that lands on a different
-*      channel has to silence the one that was playing, or it drones on
+*      channel has to give back the one that was playing, or it drones
        mov  @sndptr,r0
        jeq  sfxin1
        c    r2,@sndchn
        jeq  sfxin1
-       mov  @sndchn,r0
-       sla  r0,5
-       ori  r0,>009f                   ; Attenuation 15
-       swpb r0
-       movb r0,@sound
+       mov  r1,*r10+
+       mov  r2,*r10+
+       mov  @sndchn,r3
+       bl   @sndrst
+       dect r10
+       mov  *r10,r2
+       dect r10
+       mov  *r10,r1
 sfxin1:
        mov  r2,@sndchn
+*      An effect on tone 3 would clock a periodic noise bass, so that
+*      is muted until sndrst gives it back
+       ci   r2,2
+       jne  sfxin3
+       movb @musnc,r0
+       andi r0,>0300
+       ci   r0,>0300
+       jne  sfxin3
+       li   r0,>ff00
+       movb r0,@sound
+sfxin3:
        mov  r1,@sndptr
        clr  r0
        movb r0,@snddur
@@ -102,13 +129,10 @@ sndstp:
        bl   @sfxrd                     ; r2 = frequency, r0 = level and frames
        mov  r2,r2
        jne  sndst1
-*      End of the effect: silence the channel
+*      End of the effect: the channel goes back to the music
        clr  @sndptr
        mov  @sndchn,r3
-       sla  r3,5
-       ori  r3,>009f                   ; Attenuation 15
-       swpb r3
-       movb r3,@sound
+       bl   @sndrst
        jmp  sndst4
 sndst1:
        mov  r1,@sndptr
@@ -156,6 +180,55 @@ sndst4:
        mov  *r10,r11
        rt
 *// sndply
+
+*********************************************************************
+*
+* Give channel r3 back to the music, or silence it if none is playing
+*
+* The music stream only writes what changes, so the channel has to be
+* put back the way the tune last left it: the effect has changed its
+* pitch, and a note that carries on would otherwise carry on at the
+* effect's pitch, or not at all.  Uses r0 to r2.
+*
+sndrst:
+       mov  r3,r1                      ; Attenuation 15 on the channel,
+       sla  r1,5                       ; for when there is nothing to
+       ori  r1,>009f                   ; put back
+       swpb r1
+       mov  @musptr,r0
+       jeq  sndrs6                     ; No music
+       ci   r3,3
+       jeq  sndrs4
+       mov  r3,r2
+       sla  r2,1
+       movb @mustf(r2),r0
+       jeq  sndrs2                     ; The tune has not set it yet
+       movb r0,@sound
+       movb @mustf+1(r2),@sound
+sndrs2:
+*      A tone the tune keeps silent has no attenuation on record, the
+*      stream only carries changes: nothing on record means silent
+       movb @musat(r3),r0
+       jeq  sndrs3
+       movb r0,r1
+sndrs3:
+       movb r1,@sound
+       ci   r3,2                       ; Tone 3 clocks the noise, so
+       jne  sndrs9                     ; the noise comes back with it
+       li   r1,>ff00
+sndrs4:
+       movb @musnc,r0
+       jeq  sndrs5
+       movb r0,@sound
+sndrs5:
+       movb @musat+3,r0
+       jeq  sndrs6
+       movb r0,r1
+sndrs6:
+       movb r1,@sound
+sndrs9:
+       rt
+*// sndrst
 
 *********************************************************************
 *

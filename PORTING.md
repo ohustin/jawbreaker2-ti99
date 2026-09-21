@@ -102,9 +102,9 @@ attenuation, no envelopes.
 `tools/conv_sfx.py` reads it with the format `msx/Code/ayFX-ROM.ASM` defines -
 a control byte per frame carrying a volume, with a tone or noise period when
 the bits say so - and writes `src/sfx.a99`, so the ten effects keep their real
-envelopes. Tone periods carry over unchanged, as they do for the music,
-volumes become attenuations, and frame counts are stretched by 6/5 for the
-60 Hz frame. `src/sound.a99` plays one effect at a time as a channel plus a
+volume contours. Tone periods carry over unchanged, as they do for the music,
+volumes become attenuations through the same table as the music (below), and
+frame counts are stretched by 6/5 for the 60 Hz frame. `src/sound.a99` plays one effect at a time as a channel plus a
 list of `frequency, attenuation, frames` steps, and `sfxini` is called in
 exactly the places where the MSX calls `ayFX_INIT`.
 
@@ -128,30 +128,78 @@ and divides by 16, the TI-99/4A clocks its SN76489 at 3.579545 MHz and divides
 by 32, so **a tone period means the same pitch on both machines** and
 transfers unchanged.
 
-What does not transfer:
+Neither tune uses the AY envelope - every note is a plain square with a
+volume contour - so nothing is lost there; the converter stops with an error
+if a tune ever does, rather than guess.
 
-- **The envelope.** PT3 uses it for the buzzy bass, where the envelope runs at
-  audio rate and the tone register carries the note. The note survives, the
-  timbre does not. Envelopes slow enough to be heard as a fade are simulated
-  and become a volume.
-- **The bottom octave.** The SN76489 divider stops at 1023, about 110 Hz.
-  Lower notes are shifted up an octave: 224 of them in the intro tune, 2201
-  frames worth in the in-game tune, which is mostly that bass line.
-- **Noise.** The AY mixes noise into a tone channel; the SN76489 has a
-  separate noise channel with three fixed rates, so drums get that channel and
-  the closest rate.
+**Volume.** The AY's sixteen volume steps are not evenly spaced: about 2 dB
+apart at the top and 3-4 dB further down. The SN76489's attenuation is a
+clean 2 dB a step. The table in `conv_music.py` is computed from the AY's
+measured output levels (the DAC table of the ayumi emulator) to the nearest
+SN76489 step, so accompaniment and echo notes sit as far below the lead as
+they do on the MSX; the first version used one SN step per AY step, which put
+the quiet notes up to 8 dB too loud. The effects use the same table.
 
-The stream is a byte per frame plus the register writes:
+**The bass.** Both tunes keep their bass below 110 Hz, where the SN76489's ten
+bit divider (1023 at most) runs out: 2201 of the in-game tune's bass frames,
+a third of them two octaves down. Shifting those up an octave, which the
+first version did, plays the whole bass line in the wrong register.
+
+The SN76489 has one way further down. Its noise channel in *periodic* mode
+with the rate taken from tone channel 3 produces a pulse one fifteenth of
+tone 3's frequency (the TI's shift register is 15 bits). So tone 3 is set to
+fifteen times the bass note, silenced, and the noise channel plays the note at
+its real pitch, to within 6 cents in the in-game tune and 9 in the intro. The
+pulse is thin and buzzy rather than square, but measured A-weighted it is as
+loud as the AY square it replaces at the same attenuation (+0.3 dB), so the
+volume carries over unchanged.
+
+That takes two channels, tone 3 and the noise, so a frame gets it when one
+voice is below 110 Hz, no drum wants the noise channel and channel C has no
+note of its own - which in these tunes is every low frame except the attack
+of a bass note, where the AY mixes a burst of noise into the note. There the
+drum plays and the note starts one frame later at the right pitch, rather
+than a frame early two octaves up. Five frames of the intro, with two low
+voices at once, still shift the higher one up.
+
+**Effects and the bass.** The tune decides where the sound effects go. On the
+MSX, ayFX takes one AY channel; here the converter counts how much the tune
+uses each tone channel and writes the least used one into the stream header,
+and `sfxini` puts every tone effect there while that tune plays. For the
+in-game tune that is tone 2, whose only job during a periodic bass is to be
+silent, so eating dots never touches the bass; for the intro it stays tone 3.
+If an effect does sit on tone 3 while the bass is on the noise channel,
+`musply` keeps the noise silent instead of letting the effect's pitch drive
+it.
+
+When an effect finishes, `sndrst` puts its channel back the way the tune last
+left it. The stream only carries changes, so without that a note that carries
+on across the end of an effect would stay silent, or carry on at the effect's
+pitch. `musply` records every byte it sends, per channel, in the scratch pad
+(`mustf`, `musat`, `musnc`) for that.
+
+The stream is two header words (the loop offset and the effect channel), then
+a byte per frame plus the register writes:
 
     >00->7e   that many bytes follow, they go straight to the chip
     >7f       end of the stream, carry on from the loop point
     >80->ff   (b and >7f) frames with nothing to do
 
-which comes to 4337 bytes for the intro and 5152 for the in-game tune, a bank
-each, and about one byte a frame to play. Two details matter: the stream is
-50 Hz and the TI runs at 60, so the player skips every sixth frame, which is
-what `PlayMus` does on the MSX; and while an effect is playing the music
-leaves that channel alone, the same way ayFX takes priority on the MSX.
+which comes to 4554 bytes for the intro and 5587 for the in-game tune, a bank
+each, and about one byte a frame to play. The stream is 50 Hz and the TI runs
+at 60, so the player skips every sixth frame, which is what `PlayMus` does on
+the MSX.
+
+**Checking it.** `tools/musicheck.py` runs the cartridge in the simulator
+through the menu and several games, records every byte that reaches the sound
+chip, and decodes the music stream alongside into a chip that plays only the
+tune. On every frame the two must agree on every channel an effect is not
+using, and periodic noise must never be clocked by an effect. Over 12000
+frames - about 4100 of them in-game music with effects going off over 1600 of
+those - it finds no difference. Rendered to audio, the original and the port
+have the bass note's fundamental in the same place on all 116 clean bass
+notes of the in-game tune's first 30 seconds; the octave-shifted version had
+it on none.
 
 ## Instruction level notes
 

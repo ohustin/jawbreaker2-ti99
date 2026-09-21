@@ -1,7 +1,7 @@
 # Jawbreaker I + II Deluxe — TI-99/4A
 
 A port of the MSX1 game **Jawbreaker I + II Deluxe Edition** to the TI-99/4A,
-together with a verbatim copy of the MSX sources it was ported from.
+together with the MSX sources it was ported from.
 
 The line of descent is a small circle: *Jawbreaker* is a Sierra On-Line game
 from 1981–83, the TI-99/4A version of it was conceived by Dan Drew, Maggoo
@@ -93,6 +93,14 @@ python tools/sim99.py 260 --key=FIRE@20 --key=FIRE@60 --png=build/screen.png
 `--bank=n` starts it with bank *n* selected, the way a real cartridge board can
 come up, which is what the header in every bank is for.
 
+`tools/musicheck.py` runs it through the menu and several games and checks,
+frame by frame, that the sound chip plays what the tune asks for on every
+channel a sound effect is not using:
+
+```bash
+python tools/musicheck.py 12000
+```
+
 It has no timing model and no GROM, so it says nothing about speed on real
 hardware, but it is enough to walk the whole game: attraction screen, menu,
 both game types, eating dots and energizers, monsters, dying, finishing a
@@ -116,7 +124,7 @@ src/          the TI-99/4A port, TMS9900 assembly for xas99
   gfx-*.a99        generated graphics data
   music-*.a99      generated music, one tune per bank
   sfx.a99          generated sound effects
-msx/          the MSX1 original, copied unchanged
+msx/          the MSX1 original: sources, data, music and the 2014 ROM
 tools/        graphics, music and effect converters, build script, simulator
 docs/         screen shots
 ```
@@ -126,20 +134,23 @@ docs/         screen shots
 - **Music.** Both PT3 tunes play. The replayer from `msx/Code/PT3-ROM.ASM`
   is ported to Python (`tools/pt3.py`), runs the modules at build time and
   records the AY-3-8910 registers frame by frame; `tools/conv_music.py` maps
-  those to the SN76489 and packs the differences. What the SN76489 cannot
-  reproduce is the AY envelope, so the buzzy envelope bass keeps its notes but
-  loses its timbre, and notes below about 110 Hz are shifted up an octave
-  because the chip cannot go lower. The ten sound effects are converted from
-  the MSX ayFX bank the same way, envelope by envelope, and take their channel
-  back from the music while they play.
+  those to the SN76489 and packs the differences. The bass lines go below
+  what an SN76489 tone channel can play, so they run on the noise channel in
+  periodic mode, clocked by a silent tone channel, at their real pitch; that
+  gives them a thinner, buzzier sound than the AY's square wave. The ten
+  sound effects are converted from the MSX ayFX bank the same way, and take
+  whichever tone channel the tune playing needs least. `PORTING.md` has the
+  details.
 - **Graphics are identical.** Both machines use the TMS9918A, so every
   pattern, colour and sprite byte is reused unchanged, and the port keeps the
   MSX VRAM layout as well.
-- The MSX sources in `msx/` are the ones handed over; as they stand they do
-  not assemble, because the file that declares the RAM variables (`jawx`,
-  `leveldata`, `mstdata`, …) is missing — `msx/Jawbreak2.lst` records 403
-  "Label not found" errors from the 2020 build. The variable semantics were
-  recovered from the code itself for the port; see `PORTING.md`.
+- The MSX sources in `msx/` are the ones the port was made from; as they
+  stand they do not assemble, because the file that declares the RAM
+  variables (`jawx`, `leveldata`, `mstdata`, …) is missing — the listing of
+  the 2020 build records 403 "Label not found" errors. The variable semantics
+  were recovered from the code itself for the port; see `PORTING.md`. Tracker
+  tunes by other musicians that the game never loads, and a scan of the 1983
+  Sierra On-Line box, were left out of `msx/`.
 
 ## Credits
 

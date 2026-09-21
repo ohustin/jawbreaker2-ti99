@@ -21,13 +21,16 @@ at 60, so an effect lasts as long as it does on the MSX.
 """
 
 import os
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+
+from conv_music import AY2SN, sn_tone as _sn_tone          # noqa: E402
 
 AY_CLOCK = 1789772.5
 SN_CLOCK = 3579545.0
-AY2SN = [15, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 0]
 
 NAMES = ["dot", "energizer", "monster", "death", "level end", "level start",
          "timer", "move", "brush", "bonus"]
@@ -47,11 +50,7 @@ def noise_rate(period):
 
 
 def sn_tone(period):
-    if period < 1:
-        return 1
-    while period > 1023:
-        period >>= 1
-    return period
+    return _sn_tone(period)[0]
 
 
 def decode(bank, index):

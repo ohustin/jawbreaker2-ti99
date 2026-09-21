@@ -75,6 +75,7 @@ def main():
 
     run(find_xas99() + ["-b", "-R", "-q",
                         "-L", os.path.join("build", "jawbreaker.lst"),
+                        "-E", os.path.join("build", "sym.a99"),
                         os.path.join("src", "jawbreaker.a99"),
                         "-o", os.path.join("build", "jaw")])
 
